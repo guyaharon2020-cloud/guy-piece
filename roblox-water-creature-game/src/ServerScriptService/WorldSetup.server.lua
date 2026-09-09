@@ -24,19 +24,28 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
 	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
 
-	-- A hollow sand "frame" right at the edge of the water block: fill a
-	-- block the size of the play area, then carve out everything inside it
-	-- with Air, leaving a solid ring players can't swim past. Matching the
-	-- water block's own square footprint means there are no corner gaps.
-	local barrierCFrame = CFrame.new(Config.WaterCenter.X, Config.WaterCenter.Y, Config.WaterCenter.Z)
-	local outerSize = Vector3.new(Config.WaterSize.X, Config.BarrierHeight, Config.WaterSize.Z)
-	local innerSize = Vector3.new(
-		Config.WaterSize.X - Config.BarrierThickness * 2,
-		Config.BarrierHeight,
-		Config.WaterSize.Z - Config.BarrierThickness * 2
-	)
-	terrain:FillBlock(barrierCFrame, outerSize, Enum.Material.Sand)
-	terrain:FillBlock(barrierCFrame, innerSize, Enum.Material.Air)
+	-- A sand barrier ring, built from 4 slabs sitting entirely OUTSIDE the
+	-- water block's footprint (never overlapping it), so it can never
+	-- overwrite the water. Each slab spans the full outer width on one axis
+	-- so the 4 slabs overlap at the corners and leave no gaps.
+	local halfX = Config.WaterSize.X / 2
+	local halfZ = Config.WaterSize.Z / 2
+	local outerX = halfX + Config.BarrierThickness
+	local outerZ = halfZ + Config.BarrierThickness
+	local wallY = Config.WaterCenter.Y
+
+	local function fillWall(x, z, sizeX, sizeZ)
+		terrain:FillBlock(
+			CFrame.new(Config.WaterCenter.X + x, wallY, Config.WaterCenter.Z + z),
+			Vector3.new(sizeX, Config.BarrierHeight, sizeZ),
+			Enum.Material.Sand
+		)
+	end
+
+	fillWall(0, halfZ + Config.BarrierThickness / 2, outerX * 2, Config.BarrierThickness) -- north
+	fillWall(0, -(halfZ + Config.BarrierThickness / 2), outerX * 2, Config.BarrierThickness) -- south
+	fillWall(halfX + Config.BarrierThickness / 2, 0, Config.BarrierThickness, outerZ * 2) -- east
+	fillWall(-(halfX + Config.BarrierThickness / 2), 0, Config.BarrierThickness, outerZ * 2) -- west
 
 	-- Nicer water look than the flat default.
 	terrain.WaterColor = Color3.fromRGB(15, 80, 120)
