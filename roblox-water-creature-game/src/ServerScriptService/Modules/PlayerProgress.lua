@@ -1,9 +1,13 @@
--- Owns each player's leaderstats (Level, Money, XP) and the reward/level-up math.
--- Server-authoritative: only server scripts call into this, never the client.
+-- Owns each player's leaderstats (Level, Money, XP, Evolution), the
+-- reward/level-up/evolution math, and applying combined stats to the
+-- character. Server-authoritative: only server scripts call into this,
+-- never the client.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerUpgrades = require(script.Parent.PlayerUpgrades)
+local RobuxShop = require(script.Parent.RobuxShop)
+local CreatureAppearance = require(script.Parent.CreatureAppearance)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -44,12 +48,18 @@ function PlayerProgress.Init(player)
 	xp.Value = 0
 	xp.Parent = leaderstats
 
+	local evolution = Instance.new("IntValue")
+	evolution.Name = "Evolution"
+	evolution.Value = 0
+	evolution.Parent = leaderstats
+
 	leaderstats.Parent = player
 end
 
--- Recomputes the creature's Humanoid stats from scratch (level + shop
--- upgrades combined) and applies them. Call this after a level-up or after
--- a shop purchase — it's cheap and idempotent, so no need to track deltas.
+-- Recomputes the creature's Humanoid stats from scratch (evolution tier +
+-- level + shop upgrades combined) and applies them. Call this after a
+-- level-up, evolution, or shop purchase — it's cheap and idempotent, so no
+-- need to track deltas.
 function PlayerProgress.ApplyLevelStats(player)
 	local character = player.Character
 	local leaderstats = player:FindFirstChild("leaderstats")
@@ -63,15 +73,17 @@ function PlayerProgress.ApplyLevelStats(player)
 	end
 
 	local level = leaderstats.Level.Value
+	local tier = Config.EvolutionTiers[math.clamp(leaderstats.Evolution.Value + 1, 1, #Config.EvolutionTiers)]
+
 	local levelSpeedBonus = (level - 1) * Config.WalkSpeedPerLevel
-	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + tier.SpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
 
 	local previousMaxHealth = humanoid.MaxHealth
 	local newMaxHealth = 100 + PlayerUpgrades.GetExtraMaxHealth(player)
 	humanoid.MaxHealth = newMaxHealth
 	humanoid.Health = math.min(newMaxHealth, humanoid.Health + math.max(0, newMaxHealth - previousMaxHealth))
 
-	local scale = 1 + (level - 1) * Config.SizePerLevel
+	local scale = 1 + (level - 1) * Config.SizePerLevel + tier.SizeBonus
 	pcall(function()
 		character:ScaleTo(scale)
 	end)
@@ -79,7 +91,7 @@ end
 
 -- Called when a player's creature destroys a raft or sinks a ship.
 -- humanCount is how many humans were aboard — money and XP both scale with
--- it directly.
+-- it directly (plus shop/Robux multipliers).
 function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 	if humanCount <= 0 then
 		return
@@ -90,25 +102,45 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 		return
 	end
 
-	local moneyEarned = humanCount * Config.MoneyPerHuman
-	local xpEarned = humanCount * Config.XPPerHuman
+	local moneyMultiplier = PlayerUpgrades.GetMoneyMultiplier(player) * RobuxShop.GetActiveMultiplier(player, "Money")
+	local xpMultiplier = PlayerUpgrades.GetXPMultiplier(player) * RobuxShop.GetActiveMultiplier(player, "XP")
+
+	local moneyEarned = math.floor(humanCount * Config.MoneyPerHuman * moneyMultiplier)
+	local xpEarned = math.floor(humanCount * Config.XPPerHuman * xpMultiplier)
 
 	leaderstats.Money.Value += moneyEarned
 
 	local levelValue = leaderstats.Level
 	local xpValue = leaderstats.XP
+	local evolutionValue = leaderstats.Evolution
 	local leveledUp = false
+	local evolved = false
+	local evolutionName = nil
 
 	xpValue.Value += xpEarned
 
-	while levelValue.Value < Config.MaxLevel and xpValue.Value >= Config.XPForLevel(levelValue.Value) do
+	while xpValue.Value >= Config.XPForLevel(levelValue.Value)
+		and (levelValue.Value < Config.MaxLevel or evolutionValue.Value < Config.MaxEvolutionTier) do
 		xpValue.Value -= Config.XPForLevel(levelValue.Value)
-		levelValue.Value += 1
+
+		if levelValue.Value >= Config.LevelsPerEvolution and evolutionValue.Value < Config.MaxEvolutionTier then
+			evolutionValue.Value += 1
+			levelValue.Value = 1
+			xpValue.Value = 0
+			evolved = true
+			evolutionName = Config.EvolutionTiers[evolutionValue.Value + 1].Name
+		else
+			levelValue.Value = math.min(levelValue.Value + 1, Config.MaxLevel)
+		end
+
 		leveledUp = true
 	end
 
 	if leveledUp then
 		PlayerProgress.ApplyLevelStats(player)
+	end
+	if evolved then
+		CreatureAppearance.Apply(player)
 	end
 
 	NotifyEvent:FireClient(player, {
@@ -117,6 +149,8 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 		xp = xpEarned,
 		leveledUp = leveledUp,
 		level = levelValue.Value,
+		evolved = evolved,
+		evolutionName = evolutionName,
 	})
 end
 

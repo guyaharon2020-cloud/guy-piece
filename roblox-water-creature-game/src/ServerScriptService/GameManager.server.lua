@@ -1,19 +1,24 @@
--- Bootstraps player progress (leaderstats) on join and re-applies level-based
--- stats whenever a player's character respawns.
+-- Bootstraps player progress, upgrades, and the Robux consumables folder on
+-- join, and re-applies level stats + fish appearance whenever a player's
+-- character respawns.
 
 local Players = game:GetService("Players")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
+local CreatureAppearance = require(ServerScriptService.Modules.CreatureAppearance)
 
 local function onPlayerAdded(player)
 	PlayerProgress.Init(player)
 	PlayerUpgrades.Init(player)
+	RobuxShop.Init(player)
 
 	player.CharacterAdded:Connect(function()
 		task.wait(0.5) -- let the Humanoid finish rigging before we touch it
 		PlayerProgress.ApplyLevelStats(player)
+		CreatureAppearance.Apply(player)
 	end)
 end
 

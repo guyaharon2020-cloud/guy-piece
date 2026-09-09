@@ -6,8 +6,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 
-local UPGRADE_KEYS = { "AttackPower", "Armor", "SwimSpeed" }
-
 local PlayerUpgrades = {}
 
 function PlayerUpgrades.Init(player)
@@ -18,7 +16,7 @@ function PlayerUpgrades.Init(player)
 	local folder = Instance.new("Folder")
 	folder.Name = "Upgrades"
 
-	for _, key in ipairs(UPGRADE_KEYS) do
+	for _, key in ipairs(Config.UpgradeOrder) do
 		local tier = Instance.new("IntValue")
 		tier.Name = key
 		tier.Value = 0
@@ -38,17 +36,38 @@ function PlayerUpgrades.GetAttackPower(player)
 end
 
 function PlayerUpgrades.GetExtraMaxHealth(player)
-	return PlayerUpgrades.GetTier(player, "Armor") * Config.Upgrades.Armor.HealthPerTier
-end
-
-function PlayerUpgrades.GetShipDamageTaken(player)
-	local armorTier = PlayerUpgrades.GetTier(player, "Armor")
-	local reduction = armorTier * Config.Upgrades.Armor.DamageReductionPerTier
-	return math.max(2, Config.ShipContactDamage - reduction)
+	return PlayerUpgrades.GetTier(player, "Vitality") * Config.Upgrades.Vitality.HealthPerTier
 end
 
 function PlayerUpgrades.GetExtraWalkSpeed(player)
 	return PlayerUpgrades.GetTier(player, "SwimSpeed") * Config.Upgrades.SwimSpeed.SpeedPerTier
+end
+
+function PlayerUpgrades.GetMoneyMultiplier(player)
+	local tier = PlayerUpgrades.GetTier(player, "MoneyBoost")
+	return 1 + tier * Config.Upgrades.MoneyBoost.PercentPerTier / 100
+end
+
+function PlayerUpgrades.GetXPMultiplier(player)
+	local tier = PlayerUpgrades.GetTier(player, "XPBoost")
+	return 1 + tier * Config.Upgrades.XPBoost.PercentPerTier / 100
+end
+
+-- Combines the Armor upgrade with the permanent "Golden Scales" Robux perk
+-- (stored as a replicated BoolValue under player.Consumables — see
+-- RobuxShop.lua) into a single percent reduction applied to incoming damage.
+function PlayerUpgrades.ReduceIncomingDamage(player, baseDamage)
+	local armorTier = PlayerUpgrades.GetTier(player, "Armor")
+	local reductionPercent = armorTier * Config.Upgrades.Armor.DamageReductionPercentPerTier
+
+	local consumables = player:FindFirstChild("Consumables")
+	local goldenScales = consumables and consumables:FindFirstChild("GoldenScales")
+	if goldenScales and goldenScales.Value then
+		reductionPercent += Config.GoldenScalesDamageReductionPercent
+	end
+
+	reductionPercent = math.min(reductionPercent, 85)
+	return math.max(1, baseDamage * (1 - reductionPercent / 100))
 end
 
 -- Attempts to buy the next tier of `key` for `player`. Returns

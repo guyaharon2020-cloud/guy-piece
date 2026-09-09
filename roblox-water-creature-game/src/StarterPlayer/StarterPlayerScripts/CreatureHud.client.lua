@@ -31,17 +31,44 @@ label.Parent = screenGui
 
 NotifyEvent.OnClientEvent:Connect(function(data)
 	local text = string.format("+$%d  •  +%d XP  (%d humans)", data.money, data.xp, data.humans)
-	if data.leveledUp then
+	if data.evolved then
+		text = string.format("🐟 EVOLVED into a %s! Stats reset — level up again.", data.evolutionName)
+	elseif data.leveledUp then
 		text ..= string.format("   LEVEL UP! Now level %d", data.level)
 	end
 	label.Text = text
 	label.TextTransparency = 0
 	label.TextStrokeTransparency = 0.4
 
-	task.delay(2.5, function()
+	local displaySeconds = data.evolved and 4 or 2.5
+	task.delay(displaySeconds, function()
 		TweenService:Create(label, TweenInfo.new(1), {
 			TextTransparency = 1,
 			TextStrokeTransparency = 1,
 		}):Play()
 	end)
 end)
+
+-- Small "Depth Charges: N" indicator, only shown once you own at least one
+-- (a Robux consumable — see RobuxShop.lua).
+local consumables = player:WaitForChild("Consumables")
+local depthCharges = consumables:WaitForChild("DepthCharges")
+
+local depthChargeLabel = Instance.new("TextLabel")
+depthChargeLabel.Size = UDim2.new(0, 220, 0, 24)
+depthChargeLabel.Position = UDim2.new(0.5, -110, 0, 64)
+depthChargeLabel.BackgroundTransparency = 1
+depthChargeLabel.Font = Enum.Font.GothamBold
+depthChargeLabel.TextSize = 16
+depthChargeLabel.TextColor3 = Color3.fromRGB(255, 210, 90)
+depthChargeLabel.TextStrokeTransparency = 0.5
+depthChargeLabel.Visible = false
+depthChargeLabel.Parent = screenGui
+
+local function refreshDepthChargeLabel()
+	depthChargeLabel.Visible = depthCharges.Value > 0
+	depthChargeLabel.Text = "💣 Depth Charges: " .. depthCharges.Value
+end
+
+depthCharges:GetPropertyChangedSignal("Value"):Connect(refreshDepthChargeLabel)
+refreshDepthChargeLabel()

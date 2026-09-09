@@ -1,6 +1,7 @@
--- Periodically spawns ships: bigger, tougher versions of rafts. Ships carry
--- more humans (a bigger payout) but have a Health pool and hit back while
--- being attacked, so upgrading in the shop pays off most against these.
+-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
+-- several types (see GameConfig.ShipTypes) with different sizes, colors,
+-- and human counts. Types with HasCannon also get tagged "Cannon" so
+-- ShipCannons.server.lua fires on nearby players.
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -65,6 +66,17 @@ local function createHealthBar(ship, hull, maxHealth)
 	fill.BorderSizePixel = 0
 	fill.Parent = back
 
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 14)
+	label.Position = UDim2.new(0, 0, -1, -2)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 12
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextStrokeTransparency = 0.3
+	label.Text = ship.Name
+	label.Parent = billboard
+
 	ship:GetAttributeChangedSignal("Health"):Connect(function()
 		local health = ship:GetAttribute("Health") or 0
 		local ratio = math.clamp(health / maxHealth, 0, 1)
@@ -72,10 +84,29 @@ local function createHealthBar(ship, hull, maxHealth)
 	end)
 end
 
+-- Decorative cannon barrels sticking out both sides of the hull, purely
+-- visual (the actual firing logic lives in ShipCannons.server.lua).
+local function addCannonBarrels(ship, hull)
+	for _, side in ipairs({ -1, 1 }) do
+		local barrel = Instance.new("Part")
+		barrel.Name = "CannonBarrel"
+		barrel.Shape = Enum.PartType.Cylinder
+		barrel.Size = Vector3.new(3, 0.8, 0.8)
+		barrel.Color = Color3.fromRGB(35, 35, 38)
+		barrel.Material = Enum.Material.Metal
+		barrel.Anchored = true
+		barrel.CanCollide = false
+		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, 0, math.rad(90))
+		barrel.Parent = ship
+	end
+end
+
 local function spawnShip()
 	if #shipsFolder:GetChildren() >= Config.MaxShips then
 		return
 	end
+
+	local shipType = Config.PickShipType()
 
 	local angle = math.random() * math.pi * 2
 	local distance = math.random(80, Config.SpawnRadius)
@@ -84,14 +115,14 @@ local function spawnShip()
 	local y = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 2
 
 	local ship = Instance.new("Model")
-	ship.Name = "Ship"
+	ship.Name = shipType.Name
 
 	local hull = Instance.new("Part")
 	hull.Name = "Hitbox"
-	hull.Size = Vector3.new(32, 6, 12)
+	hull.Size = shipType.HullSize
 	hull.CFrame = CFrame.new(x, y, z) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
 	hull.Anchored = true
-	hull.Color = Color3.fromRGB(90, 65, 45)
+	hull.Color = shipType.HullColor
 	hull.Material = Enum.Material.WoodPlanks
 	hull.Parent = ship
 
@@ -100,10 +131,10 @@ local function spawnShip()
 	local cabin = Instance.new("Part")
 	cabin.Name = "Cabin"
 	cabin.Size = Vector3.new(8, 5, 8)
-	cabin.CFrame = hull.CFrame * CFrame.new(-6, 5, 0)
+	cabin.CFrame = hull.CFrame * CFrame.new(-hull.Size.X / 4, 5, 0)
 	cabin.Anchored = true
 	cabin.CanCollide = false
-	cabin.Color = Color3.fromRGB(120, 90, 60)
+	cabin.Color = shipType.CabinColor
 	cabin.Material = Enum.Material.Wood
 	cabin.Parent = ship
 
@@ -117,22 +148,41 @@ local function spawnShip()
 	mast.Color = Color3.fromRGB(70, 50, 35)
 	mast.Parent = ship
 
-	local humanCount = math.random(Config.HumansPerShipMin, Config.HumansPerShipMax)
+	if shipType.HasCannon then
+		addCannonBarrels(ship, hull)
+	end
+
+	local humanCount = math.random(shipType.HumansMin, shipType.HumansMax)
 	for _ = 1, humanCount do
-		local localOffset = Vector3.new(math.random(-140, 140) / 10, 4, math.random(-50, 50) / 10)
+		local localOffset = Vector3.new(
+			math.random(-hull.Size.X * 4, hull.Size.X * 4) / 10,
+			4,
+			math.random(-hull.Size.Z * 4, hull.Size.Z * 4) / 10
+		)
 		local worldPosition = (hull.CFrame * CFrame.new(localOffset)).Position
 		local human = createHuman(worldPosition)
 		human.Parent = ship
 	end
 
-	local shipHealth = humanCount + math.random(2, 5)
+	local shipHealth = humanCount + shipType.HealthBonus + math.random(2, 5)
+	ship:SetAttribute("ShipType", shipType.Key)
 	ship:SetAttribute("HumanCount", humanCount)
 	ship:SetAttribute("Health", shipHealth)
 	ship:SetAttribute("MaxHealth", shipHealth)
 
+	if shipType.HasCannon then
+		ship:SetAttribute("CannonDamage", shipType.CannonDamage)
+		ship:SetAttribute("CannonRange", shipType.CannonRange)
+		ship:SetAttribute("CannonCooldown", shipType.CannonCooldown)
+	end
+
 	createHealthBar(ship, hull, shipHealth)
 
 	CollectionService:AddTag(hull, "Ship")
+	if shipType.HasCannon then
+		CollectionService:AddTag(hull, "Cannon")
+	end
+
 	ship.Parent = shipsFolder
 end
 

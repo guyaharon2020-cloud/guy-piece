@@ -1,8 +1,9 @@
 -- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
 -- combat: each hit reduces the ship's Health by the attacking player's
 -- AttackPower upgrade, and the ship hits back for contact damage (reduced
--- by the player's Armor upgrade). The ship sinks and pays out once Health
--- reaches 0.
+-- by Armor/Golden Scales). A Depth Charge (Robux consumable), if the player
+-- has one, instantly sinks the ship instead. The ship sinks and pays out
+-- once Health reaches 0.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -12,6 +13,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
 
 local lastHitAt = {}
 
@@ -37,11 +39,17 @@ local function onShipTagged(hull)
 
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid and humanoid.Health > 0 then
-			humanoid:TakeDamage(PlayerUpgrades.GetShipDamageTaken(player))
+			humanoid:TakeDamage(PlayerUpgrades.ReduceIncomingDamage(player, Config.ShipContactDamage))
 		end
 
-		local remainingHealth = (ship:GetAttribute("Health") or 0) - PlayerUpgrades.GetAttackPower(player)
-		ship:SetAttribute("Health", remainingHealth)
+		local usedDepthCharge = RobuxShop.ConsumeDepthCharge(player)
+		local remainingHealth
+		if usedDepthCharge then
+			remainingHealth = 0
+		else
+			remainingHealth = (ship:GetAttribute("Health") or 0) - PlayerUpgrades.GetAttackPower(player)
+		end
+		ship:SetAttribute("Health", math.max(remainingHealth, 0))
 
 		if remainingHealth <= 0 then
 			connection:Disconnect()

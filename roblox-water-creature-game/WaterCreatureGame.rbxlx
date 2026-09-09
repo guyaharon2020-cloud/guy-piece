@@ -33,14 +33,14 @@ Config.SpawnRadius = 400 -- studs from the water center
 Config.HumansPerRaftMin = 2
 Config.HumansPerRaftMax = 6
 
--- Economy: destroying a raft pays out per human that was on it
+-- Economy: destroying a raft/ship pays out per human that was aboard
 Config.MoneyPerHuman = 1
 Config.XPPerHuman = 10
 
--- Leveling: swim speed and size grow with level
-Config.BaseWalkSpeed = 40
+-- Leveling
 Config.WalkSpeedPerLevel = 3
-Config.SizePerLevel = 0.03 -- +3% scale per level
+Config.SizePerLevel = 0.03 -- +3% scale per level (on top of the evolution tier's base)
+Config.BaseWalkSpeed = 40
 Config.MaxLevel = 50
 
 -- XP required to go from `level` to `level + 1`
@@ -48,14 +48,90 @@ function Config.XPForLevel(level)
 	return math.floor(100 * level ^ 1.35)
 end
 
--- Ships: bigger, tougher targets than rafts. They carry more humans (a
--- bigger payout) but take several hits to sink and hit back while you're
--- attacking them, so the shop upgrades below matter most here.
+-- Evolution: every LevelsPerEvolution levels, the creature evolves into the
+-- next tier (new color/fins/base stats) and Level + XP reset to 1/0 so you
+-- level up again within the new tier. Money and shop upgrades are NOT reset.
+Config.LevelsPerEvolution = 12
+Config.EvolutionTiers = {
+	{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0 },
+	{ Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140), FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15 },
+	{ Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78), FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3 },
+	{ Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90), FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5 },
+	{ Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28), FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8 },
+	{ Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200), FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2 },
+}
+Config.MaxEvolutionTier = #Config.EvolutionTiers - 1 -- 0-indexed (tier 0 = Minnow)
+
+-- Ships: several types, each with its own size/color/human count. Types with
+-- HasCannon fire on nearby players at short range (see ShipCannons).
 Config.ShipSpawnInterval = 25
 Config.MaxShips = 4
-Config.HumansPerShipMin = 8
-Config.HumansPerShipMax = 15
-Config.ShipContactDamage = 15 -- base damage dealt to the player per hit landed
+Config.ShipTypes = {
+	{
+		Key = "Sloop",
+		Name = "Sloop",
+		Weight = 50,
+		HullSize = Vector3.new(28, 6, 11),
+		HullColor = Color3.fromRGB(120, 85, 55),
+		CabinColor = Color3.fromRGB(150, 110, 70),
+		HumansMin = 8,
+		HumansMax = 12,
+		HealthBonus = 0,
+		HasCannon = false,
+	},
+	{
+		Key = "Frigate",
+		Name = "Frigate",
+		Weight = 35,
+		HullSize = Vector3.new(34, 7, 13),
+		HullColor = Color3.fromRGB(70, 75, 82),
+		CabinColor = Color3.fromRGB(45, 48, 55),
+		HumansMin = 12,
+		HumansMax = 18,
+		HealthBonus = 6,
+		HasCannon = true,
+		CannonDamage = 10,
+		CannonRange = 55,
+		CannonCooldown = 5,
+	},
+	{
+		Key = "Galleon",
+		Name = "Galleon",
+		Weight = 15,
+		HullSize = Vector3.new(42, 8, 16),
+		HullColor = Color3.fromRGB(120, 35, 40),
+		CabinColor = Color3.fromRGB(150, 120, 40),
+		HumansMin = 18,
+		HumansMax = 26,
+		HealthBonus = 14,
+		HasCannon = true,
+		CannonDamage = 16,
+		CannonRange = 65,
+		CannonCooldown = 4,
+	},
+}
+
+-- Picks a ship type using each entry's Weight (bigger weight = more common).
+function Config.PickShipType()
+	local totalWeight = 0
+	for _, shipType in ipairs(Config.ShipTypes) do
+		totalWeight += shipType.Weight
+	end
+
+	local roll = math.random() * totalWeight
+	local cumulative = 0
+	for _, shipType in ipairs(Config.ShipTypes) do
+		cumulative += shipType.Weight
+		if roll <= cumulative then
+			return shipType
+		end
+	end
+
+	return Config.ShipTypes[#Config.ShipTypes]
+end
+
+-- Ship combat
+Config.ShipContactDamage = 15 -- base damage dealt to the player per ram hit
 Config.ShipTouchCooldown = 1 -- seconds between hits registering against the same ship
 
 -- Upgrade shop: tiers bought with Money (leaderstat), 0 = not purchased yet.
@@ -67,14 +143,21 @@ Config.Upgrades = {
 		BaseCost = 15,
 		CostGrowth = 1.6,
 	},
-	Armor = {
-		Name = "Armor",
-		Description = "More max health and less damage taken from ships.",
+	Vitality = {
+		Name = "Vitality",
+		Description = "Increases your max health.",
 		MaxTier = 9,
 		BaseCost = 15,
-		CostGrowth = 1.6,
+		CostGrowth = 1.55,
 		HealthPerTier = 20,
-		DamageReductionPerTier = 1.5,
+	},
+	Armor = {
+		Name = "Scales",
+		Description = "Reduces damage taken from ships and cannon fire.",
+		MaxTier = 9,
+		BaseCost = 18,
+		CostGrowth = 1.6,
+		DamageReductionPercentPerTier = 4,
 	},
 	SwimSpeed = {
 		Name = "Fins",
@@ -84,13 +167,77 @@ Config.Upgrades = {
 		CostGrowth = 1.5,
 		SpeedPerTier = 4,
 	},
+	MoneyBoost = {
+		Name = "Greed",
+		Description = "Earn more Money per human destroyed.",
+		MaxTier = 9,
+		BaseCost = 20,
+		CostGrowth = 1.7,
+		PercentPerTier = 8,
+	},
+	XPBoost = {
+		Name = "Wisdom",
+		Description = "Earn more XP per human destroyed.",
+		MaxTier = 9,
+		BaseCost = 20,
+		CostGrowth = 1.7,
+		PercentPerTier = 8,
+	},
 }
+Config.UpgradeOrder = { "AttackPower", "Vitality", "Armor", "SwimSpeed", "MoneyBoost", "XPBoost" }
 
 -- Cost to go from `currentTier` to `currentTier + 1` for the given upgrade.
 function Config.UpgradeCost(upgradeKey, currentTier)
 	local upgrade = Config.Upgrades[upgradeKey]
 	return math.floor(upgrade.BaseCost * (upgrade.CostGrowth ^ currentTier))
 end
+
+-- Robux shop ("super powers" bought with real Robux via Developer Products).
+-- IMPORTANT: ProductId = 0 is a placeholder. Create each Developer Product in
+-- Studio (Monetization tab, once the place is published) and paste its real
+-- ID here before this can actually be purchased.
+Config.GoldenScalesDamageReductionPercent = 25
+Config.RobuxProducts = {
+	{
+		Key = "DoubleMoney30",
+		ProductId = 0,
+		Name = "2x Money (30 min)",
+		Description = "Doubles the Money you earn from every kill for 30 minutes.",
+		DisplayPriceHint = "R$ 49",
+		Kind = "Boost",
+		BoostType = "Money",
+		Multiplier = 2,
+		DurationSeconds = 1800,
+	},
+	{
+		Key = "DoubleXP30",
+		ProductId = 0,
+		Name = "2x XP (30 min)",
+		Description = "Doubles the XP you earn from every kill for 30 minutes.",
+		DisplayPriceHint = "R$ 49",
+		Kind = "Boost",
+		BoostType = "XP",
+		Multiplier = 2,
+		DurationSeconds = 1800,
+	},
+	{
+		Key = "DepthCharge",
+		ProductId = 0,
+		Name = "Depth Charge",
+		Description = "Instantly sinks the next ship you touch, no matter its health.",
+		DisplayPriceHint = "R$ 25",
+		Kind = "Consumable",
+		Charges = 1,
+	},
+	{
+		Key = "GoldenScales",
+		ProductId = 0,
+		Name = "Golden Scales",
+		Description = "Permanent +25% damage reduction from ships, forever, and a shimmering gold look.",
+		DisplayPriceHint = "R$ 149",
+		Kind = "Permanent",
+	},
+}
 
 return Config
 ]]></ProtectedString>
@@ -105,22 +252,27 @@ return Config
 		<Item class="Script" referent="RBX6">
 			<Properties>
 				<string name="Name">GameManager</string>
-				<ProtectedString name="Source"><![CDATA[-- Bootstraps player progress (leaderstats) on join and re-applies level-based
--- stats whenever a player's character respawns.
+				<ProtectedString name="Source"><![CDATA[-- Bootstraps player progress, upgrades, and the Robux consumables folder on
+-- join, and re-applies level stats + fish appearance whenever a player's
+-- character respawns.
 
 local Players = game:GetService("Players")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
+local CreatureAppearance = require(ServerScriptService.Modules.CreatureAppearance)
 
 local function onPlayerAdded(player)
 	PlayerProgress.Init(player)
 	PlayerUpgrades.Init(player)
+	RobuxShop.Init(player)
 
 	player.CharacterAdded:Connect(function()
 		task.wait(0.5) -- let the Humanoid finish rigging before we touch it
 		PlayerProgress.ApplyLevelStats(player)
+		CreatureAppearance.Apply(player)
 	end)
 end
 
@@ -138,13 +290,116 @@ end
 			</Properties>
 			<Item class="ModuleScript" referent="RBX8">
 				<Properties>
+					<string name="Name">CreatureAppearance</string>
+					<ProtectedString name="Source"><![CDATA[-- Makes the player's default Roblox character look like a fish: strips
+-- normal clothing/accessories, recolors the body per evolution tier, and
+-- welds on a few cosmetic fin parts. Runs entirely with primitive Parts —
+-- no custom mesh/asset upload is needed (and none is available from here).
+--
+-- Kept deliberately simple: fins are rigidly welded to the torso, so they
+-- won't deform with walk/swim animations, but they read fine at a glance
+-- and need zero external assets.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local CreatureAppearance = {}
+
+local function getTorso(character)
+	return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+end
+
+local function attachFin(character, torso, name, size, color, offset)
+	local fin = Instance.new("WedgePart")
+	fin.Name = name
+	fin.Size = size
+	fin.Color = color
+	fin.Material = Enum.Material.SmoothPlastic
+	fin.CanCollide = false
+	fin.CanQuery = false
+	fin.Massless = true
+	fin.CFrame = torso.CFrame * offset
+	fin.Parent = character
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = torso
+	weld.Part1 = fin
+	weld.Parent = fin
+
+	return fin
+end
+
+function CreatureAppearance.Apply(player)
+	local character = player.Character
+	if not character then
+		return
+	end
+
+	local torso = getTorso(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not torso or not humanoid then
+		return
+	end
+
+	for _, item in ipairs(character:GetChildren()) do
+		if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("Accessory") then
+			item:Destroy()
+		end
+	end
+
+	local leaderstats = player:FindFirstChild("leaderstats")
+	local tierIndex = (leaderstats and leaderstats.Evolution.Value or 0) + 1
+	local tier = Config.EvolutionTiers[math.clamp(tierIndex, 1, #Config.EvolutionTiers)]
+
+	local consumables = player:FindFirstChild("Consumables")
+	local goldenScales = consumables and consumables:FindFirstChild("GoldenScales")
+	local bodyColor = (goldenScales and goldenScales.Value) and Color3.fromRGB(230, 190, 60) or tier.Color
+
+	local bodyColors = character:FindFirstChildOfClass("BodyColors") or Instance.new("BodyColors")
+	bodyColors.HeadColor3 = bodyColor
+	bodyColors.TorsoColor3 = bodyColor
+	bodyColors.LeftArmColor3 = bodyColor
+	bodyColors.RightArmColor3 = bodyColor
+	bodyColors.LeftLegColor3 = bodyColor
+	bodyColors.RightLegColor3 = bodyColor
+	bodyColors.Parent = character
+
+	local existingFins = character:FindFirstChild("CreatureFins")
+	if existingFins then
+		existingFins:Destroy()
+	end
+
+	local finsFolder = Instance.new("Folder")
+	finsFolder.Name = "CreatureFins"
+
+	local finColor = tier.FinColor
+	local s = tier.FinScale
+
+	attachFin(character, torso, "TailFin", Vector3.new(0.4, 2.2 * s, 3 * s), finColor, CFrame.new(0, -0.5, 1.4) * CFrame.Angles(0, math.rad(180), 0)).Parent = finsFolder
+	attachFin(character, torso, "DorsalFin", Vector3.new(0.4, 1.6 * s, 1.6 * s), finColor, CFrame.new(0, 1.2, 0) * CFrame.Angles(0, 0, math.rad(90))).Parent = finsFolder
+	attachFin(character, torso, "LeftFin", Vector3.new(1.4 * s, 0.3, 1 * s), finColor, CFrame.new(-1.1, 0, 0) * CFrame.Angles(0, 0, math.rad(20))).Parent = finsFolder
+	attachFin(character, torso, "RightFin", Vector3.new(1.4 * s, 0.3, 1 * s), finColor, CFrame.new(1.1, 0, 0) * CFrame.Angles(0, 0, math.rad(-20))).Parent = finsFolder
+
+	finsFolder.Parent = character
+end
+
+return CreatureAppearance
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX9">
+				<Properties>
 					<string name="Name">PlayerProgress</string>
-					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP) and the reward/level-up math.
--- Server-authoritative: only server scripts call into this, never the client.
+					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP, Evolution), the
+-- reward/level-up/evolution math, and applying combined stats to the
+-- character. Server-authoritative: only server scripts call into this,
+-- never the client.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerUpgrades = require(script.Parent.PlayerUpgrades)
+local RobuxShop = require(script.Parent.RobuxShop)
+local CreatureAppearance = require(script.Parent.CreatureAppearance)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -185,12 +440,18 @@ function PlayerProgress.Init(player)
 	xp.Value = 0
 	xp.Parent = leaderstats
 
+	local evolution = Instance.new("IntValue")
+	evolution.Name = "Evolution"
+	evolution.Value = 0
+	evolution.Parent = leaderstats
+
 	leaderstats.Parent = player
 end
 
--- Recomputes the creature's Humanoid stats from scratch (level + shop
--- upgrades combined) and applies them. Call this after a level-up or after
--- a shop purchase — it's cheap and idempotent, so no need to track deltas.
+-- Recomputes the creature's Humanoid stats from scratch (evolution tier +
+-- level + shop upgrades combined) and applies them. Call this after a
+-- level-up, evolution, or shop purchase — it's cheap and idempotent, so no
+-- need to track deltas.
 function PlayerProgress.ApplyLevelStats(player)
 	local character = player.Character
 	local leaderstats = player:FindFirstChild("leaderstats")
@@ -204,15 +465,17 @@ function PlayerProgress.ApplyLevelStats(player)
 	end
 
 	local level = leaderstats.Level.Value
+	local tier = Config.EvolutionTiers[math.clamp(leaderstats.Evolution.Value + 1, 1, #Config.EvolutionTiers)]
+
 	local levelSpeedBonus = (level - 1) * Config.WalkSpeedPerLevel
-	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + tier.SpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
 
 	local previousMaxHealth = humanoid.MaxHealth
 	local newMaxHealth = 100 + PlayerUpgrades.GetExtraMaxHealth(player)
 	humanoid.MaxHealth = newMaxHealth
 	humanoid.Health = math.min(newMaxHealth, humanoid.Health + math.max(0, newMaxHealth - previousMaxHealth))
 
-	local scale = 1 + (level - 1) * Config.SizePerLevel
+	local scale = 1 + (level - 1) * Config.SizePerLevel + tier.SizeBonus
 	pcall(function()
 		character:ScaleTo(scale)
 	end)
@@ -220,7 +483,7 @@ end
 
 -- Called when a player's creature destroys a raft or sinks a ship.
 -- humanCount is how many humans were aboard — money and XP both scale with
--- it directly.
+-- it directly (plus shop/Robux multipliers).
 function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 	if humanCount <= 0 then
 		return
@@ -231,25 +494,45 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 		return
 	end
 
-	local moneyEarned = humanCount * Config.MoneyPerHuman
-	local xpEarned = humanCount * Config.XPPerHuman
+	local moneyMultiplier = PlayerUpgrades.GetMoneyMultiplier(player) * RobuxShop.GetActiveMultiplier(player, "Money")
+	local xpMultiplier = PlayerUpgrades.GetXPMultiplier(player) * RobuxShop.GetActiveMultiplier(player, "XP")
+
+	local moneyEarned = math.floor(humanCount * Config.MoneyPerHuman * moneyMultiplier)
+	local xpEarned = math.floor(humanCount * Config.XPPerHuman * xpMultiplier)
 
 	leaderstats.Money.Value += moneyEarned
 
 	local levelValue = leaderstats.Level
 	local xpValue = leaderstats.XP
+	local evolutionValue = leaderstats.Evolution
 	local leveledUp = false
+	local evolved = false
+	local evolutionName = nil
 
 	xpValue.Value += xpEarned
 
-	while levelValue.Value < Config.MaxLevel and xpValue.Value >= Config.XPForLevel(levelValue.Value) do
+	while xpValue.Value >= Config.XPForLevel(levelValue.Value)
+		and (levelValue.Value < Config.MaxLevel or evolutionValue.Value < Config.MaxEvolutionTier) do
 		xpValue.Value -= Config.XPForLevel(levelValue.Value)
-		levelValue.Value += 1
+
+		if levelValue.Value >= Config.LevelsPerEvolution and evolutionValue.Value < Config.MaxEvolutionTier then
+			evolutionValue.Value += 1
+			levelValue.Value = 1
+			xpValue.Value = 0
+			evolved = true
+			evolutionName = Config.EvolutionTiers[evolutionValue.Value + 1].Name
+		else
+			levelValue.Value = math.min(levelValue.Value + 1, Config.MaxLevel)
+		end
+
 		leveledUp = true
 	end
 
 	if leveledUp then
 		PlayerProgress.ApplyLevelStats(player)
+	end
+	if evolved then
+		CreatureAppearance.Apply(player)
 	end
 
 	NotifyEvent:FireClient(player, {
@@ -258,6 +541,8 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 		xp = xpEarned,
 		leveledUp = leveledUp,
 		level = levelValue.Value,
+		evolved = evolved,
+		evolutionName = evolutionName,
 	})
 end
 
@@ -265,7 +550,7 @@ return PlayerProgress
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX9">
+			<Item class="ModuleScript" referent="RBX10">
 				<Properties>
 					<string name="Name">PlayerUpgrades</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's shop upgrade tiers (a non-leaderstat "Upgrades" folder,
@@ -275,8 +560,6 @@ return PlayerProgress
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
-
-local UPGRADE_KEYS = { "AttackPower", "Armor", "SwimSpeed" }
 
 local PlayerUpgrades = {}
 
@@ -288,7 +571,7 @@ function PlayerUpgrades.Init(player)
 	local folder = Instance.new("Folder")
 	folder.Name = "Upgrades"
 
-	for _, key in ipairs(UPGRADE_KEYS) do
+	for _, key in ipairs(Config.UpgradeOrder) do
 		local tier = Instance.new("IntValue")
 		tier.Name = key
 		tier.Value = 0
@@ -308,17 +591,38 @@ function PlayerUpgrades.GetAttackPower(player)
 end
 
 function PlayerUpgrades.GetExtraMaxHealth(player)
-	return PlayerUpgrades.GetTier(player, "Armor") * Config.Upgrades.Armor.HealthPerTier
-end
-
-function PlayerUpgrades.GetShipDamageTaken(player)
-	local armorTier = PlayerUpgrades.GetTier(player, "Armor")
-	local reduction = armorTier * Config.Upgrades.Armor.DamageReductionPerTier
-	return math.max(2, Config.ShipContactDamage - reduction)
+	return PlayerUpgrades.GetTier(player, "Vitality") * Config.Upgrades.Vitality.HealthPerTier
 end
 
 function PlayerUpgrades.GetExtraWalkSpeed(player)
 	return PlayerUpgrades.GetTier(player, "SwimSpeed") * Config.Upgrades.SwimSpeed.SpeedPerTier
+end
+
+function PlayerUpgrades.GetMoneyMultiplier(player)
+	local tier = PlayerUpgrades.GetTier(player, "MoneyBoost")
+	return 1 + tier * Config.Upgrades.MoneyBoost.PercentPerTier / 100
+end
+
+function PlayerUpgrades.GetXPMultiplier(player)
+	local tier = PlayerUpgrades.GetTier(player, "XPBoost")
+	return 1 + tier * Config.Upgrades.XPBoost.PercentPerTier / 100
+end
+
+-- Combines the Armor upgrade with the permanent "Golden Scales" Robux perk
+-- (stored as a replicated BoolValue under player.Consumables — see
+-- RobuxShop.lua) into a single percent reduction applied to incoming damage.
+function PlayerUpgrades.ReduceIncomingDamage(player, baseDamage)
+	local armorTier = PlayerUpgrades.GetTier(player, "Armor")
+	local reductionPercent = armorTier * Config.Upgrades.Armor.DamageReductionPercentPerTier
+
+	local consumables = player:FindFirstChild("Consumables")
+	local goldenScales = consumables and consumables:FindFirstChild("GoldenScales")
+	if goldenScales and goldenScales.Value then
+		reductionPercent += Config.GoldenScalesDamageReductionPercent
+	end
+
+	reductionPercent = math.min(reductionPercent, 85)
+	return math.max(1, baseDamage * (1 - reductionPercent / 100))
 end
 
 -- Attempts to buy the next tier of `key` for `player`. Returns
@@ -355,8 +659,157 @@ return PlayerUpgrades
 ]]></ProtectedString>
 				</Properties>
 			</Item>
+			<Item class="ModuleScript" referent="RBX11">
+				<Properties>
+					<string name="Name">RobuxShop</string>
+					<ProtectedString name="Source"><![CDATA[-- The "Robux Shop": real-money super powers bought via MarketplaceService
+-- Developer Products. See GameConfig.RobuxProducts — every ProductId there
+-- is a placeholder (0) until you create the matching Developer Product in
+-- Studio's Monetization tab (requires a published place) and paste its real
+-- ID in.
+--
+-- NOTE ON PERSISTENCE: this project has no DataStore layer yet (see
+-- README), so everything granted here — Depth Charges, Golden Scales, Money/
+-- XP boosts — lives only for the current server session. Before shipping
+-- this with real purchases, add DataStore-backed saving AND record
+-- processed receipts in it, so a retried receipt after a crash/restart is
+-- never silently dropped or double-granted.
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+local CreatureAppearance = require(script.Parent.CreatureAppearance)
+
+local RobuxShop = {}
+
+-- Temporary Money/XP boosts, kept in memory only (see note above).
+local activeBoosts = {}
+
+function RobuxShop.Init(player)
+	if player:FindFirstChild("Consumables") then
+		return
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Consumables"
+
+	local depthCharges = Instance.new("IntValue")
+	depthCharges.Name = "DepthCharges"
+	depthCharges.Value = 0
+	depthCharges.Parent = folder
+
+	local goldenScales = Instance.new("BoolValue")
+	goldenScales.Name = "GoldenScales"
+	goldenScales.Value = false
+	goldenScales.Parent = folder
+
+	folder.Parent = player
+end
+
+function RobuxShop.GetActiveMultiplier(player, boostType)
+	local boosts = activeBoosts[player]
+	local boost = boosts and boosts[boostType]
+	if not boost then
+		return 1
+	end
+
+	if os.clock() > boost.expiresAt then
+		boosts[boostType] = nil
+		return 1
+	end
+
+	return boost.multiplier
+end
+
+function RobuxShop.ConsumeDepthCharge(player)
+	local consumables = player:FindFirstChild("Consumables")
+	local depthCharges = consumables and consumables:FindFirstChild("DepthCharges")
+	if not depthCharges or depthCharges.Value <= 0 then
+		return false
+	end
+
+	depthCharges.Value -= 1
+	return true
+end
+
+local function findProductByProductId(productId)
+	for _, product in ipairs(Config.RobuxProducts) do
+		if product.ProductId == productId then
+			return product
+		end
+	end
+	return nil
+end
+
+function RobuxShop.FindProductByKey(key)
+	for _, product in ipairs(Config.RobuxProducts) do
+		if product.Key == key then
+			return product
+		end
+	end
+	return nil
+end
+
+local function grantProduct(player, product)
+	local consumables = player:FindFirstChild("Consumables")
+	if not consumables then
+		return
+	end
+
+	if product.Kind == "Boost" then
+		activeBoosts[player] = activeBoosts[player] or {}
+		activeBoosts[player][product.BoostType] = {
+			multiplier = product.Multiplier,
+			expiresAt = os.clock() + product.DurationSeconds,
+		}
+	elseif product.Kind == "Consumable" then
+		consumables.DepthCharges.Value += product.Charges
+	elseif product.Kind == "Permanent" then
+		consumables.GoldenScales.Value = true
+		CreatureAppearance.Apply(player)
+	end
+end
+
+function RobuxShop.PromptPurchase(player, productKey)
+	local product = RobuxShop.FindProductByKey(productKey)
+	if not product then
+		return
+	end
+	MarketplaceService:PromptProductPurchase(player, product.ProductId)
+end
+
+function RobuxShop.SetupReceiptProcessing()
+	Players.PlayerRemoving:Connect(function(player)
+		activeBoosts[player] = nil
+	end)
+
+	MarketplaceService.ProcessReceipt = function(receiptInfo)
+		local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+		if not player then
+			-- Player isn't in the game (e.g. left mid-purchase). Ask Roblox
+			-- to retry later rather than losing the receipt.
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+
+		local product = findProductByProductId(receiptInfo.ProductId)
+		if not product then
+			warn("RobuxShop: purchase for an unconfigured ProductId " .. tostring(receiptInfo.ProductId))
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+
+		grantProduct(player, product)
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+end
+
+return RobuxShop
+]]></ProtectedString>
+				</Properties>
+			</Item>
 		</Item>
-		<Item class="Script" referent="RBX10">
+		<Item class="Script" referent="RBX12">
 			<Properties>
 				<string name="Name">RaftDestruction</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
@@ -413,7 +866,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX11">
+		<Item class="Script" referent="RBX13">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -504,14 +957,133 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX12">
+		<Item class="Script" referent="RBX14">
+			<Properties>
+				<string name="Name">ShipCannons</string>
+				<ProtectedString name="Source"><![CDATA[-- Ships tagged "Cannon" (Frigates and Galleons — see ShipSpawner) periodically
+-- fire a cannonball at the nearest player within their short CannonRange.
+-- The ball travels in a straight line at fire-time toward the target (not
+-- homing) and deals damage on contact, reduced by Armor/Golden Scales.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+
+local CANNONBALL_SPEED = 90
+
+local function findNearestTarget(position, range)
+	local nearestPlayer, nearestDistance
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+		if humanoid and humanoid.Health > 0 and rootPart then
+			local distance = (rootPart.Position - position).Magnitude
+			if distance <= range and (not nearestDistance or distance < nearestDistance) then
+				nearestPlayer, nearestDistance = player, distance
+			end
+		end
+	end
+
+	return nearestPlayer
+end
+
+local function fireCannonball(ship, hull, target)
+	local rootPart = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return
+	end
+
+	local damage = ship:GetAttribute("CannonDamage") or 10
+	local muzzle = hull.Position + Vector3.new(0, 3, 0)
+	local direction = (rootPart.Position - muzzle).Unit
+
+	local ball = Instance.new("Part")
+	ball.Name = "Cannonball"
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.new(1.4, 1.4, 1.4)
+	ball.Color = Color3.fromRGB(35, 35, 38)
+	ball.Material = Enum.Material.Slate
+	ball.CanCollide = false
+	ball.CFrame = CFrame.new(muzzle)
+	ball.Parent = Workspace
+
+	local bodyVelocity = Instance.new("BodyVelocity")
+	bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+	bodyVelocity.Velocity = direction * CANNONBALL_SPEED
+	bodyVelocity.Parent = ball
+
+	local connection
+	connection = ball.Touched:Connect(function(otherPart)
+		local character = otherPart.Parent
+		local player = character and Players:GetPlayerFromCharacter(character)
+		if not player then
+			return
+		end
+
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.Health > 0 then
+			humanoid:TakeDamage(PlayerUpgrades.ReduceIncomingDamage(player, damage))
+		end
+
+		if connection then
+			connection:Disconnect()
+		end
+		ball:Destroy()
+	end)
+
+	Debris:AddItem(ball, 3)
+end
+
+local function onCannonShipTagged(hull)
+	local ship = hull.Parent
+	if not ship then
+		return
+	end
+
+	task.spawn(function()
+		while hull.Parent do
+			local cooldown = ship:GetAttribute("CannonCooldown") or 5
+			task.wait(cooldown)
+
+			if not hull.Parent then
+				break
+			end
+
+			local range = ship:GetAttribute("CannonRange") or 50
+			local target = findNearestTarget(hull.Position, range)
+			if target then
+				fireCannonball(ship, hull, target)
+			end
+		end
+	end)
+end
+
+CollectionService:GetInstanceAddedSignal("Cannon"):Connect(onCannonShipTagged)
+
+for _, hull in ipairs(CollectionService:GetTagged("Cannon")) do
+	onCannonShipTagged(hull)
+end
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX15">
 			<Properties>
 				<string name="Name">ShipCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
 -- combat: each hit reduces the ship's Health by the attacking player's
 -- AttackPower upgrade, and the ship hits back for contact damage (reduced
--- by the player's Armor upgrade). The ship sinks and pays out once Health
--- reaches 0.
+-- by Armor/Golden Scales). A Depth Charge (Robux consumable), if the player
+-- has one, instantly sinks the ship instead. The ship sinks and pays out
+-- once Health reaches 0.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -521,6 +1093,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
 
 local lastHitAt = {}
 
@@ -546,11 +1119,17 @@ local function onShipTagged(hull)
 
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid and humanoid.Health > 0 then
-			humanoid:TakeDamage(PlayerUpgrades.GetShipDamageTaken(player))
+			humanoid:TakeDamage(PlayerUpgrades.ReduceIncomingDamage(player, Config.ShipContactDamage))
 		end
 
-		local remainingHealth = (ship:GetAttribute("Health") or 0) - PlayerUpgrades.GetAttackPower(player)
-		ship:SetAttribute("Health", remainingHealth)
+		local usedDepthCharge = RobuxShop.ConsumeDepthCharge(player)
+		local remainingHealth
+		if usedDepthCharge then
+			remainingHealth = 0
+		else
+			remainingHealth = (ship:GetAttribute("Health") or 0) - PlayerUpgrades.GetAttackPower(player)
+		end
+		ship:SetAttribute("Health", math.max(remainingHealth, 0))
 
 		if remainingHealth <= 0 then
 			connection:Disconnect()
@@ -578,12 +1157,13 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX13">
+		<Item class="Script" referent="RBX16">
 			<Properties>
 				<string name="Name">ShipSpawner</string>
-				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts. Ships carry
--- more humans (a bigger payout) but have a Health pool and hit back while
--- being attacked, so upgrading in the shop pays off most against these.
+				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
+-- several types (see GameConfig.ShipTypes) with different sizes, colors,
+-- and human counts. Types with HasCannon also get tagged "Cannon" so
+-- ShipCannons.server.lua fires on nearby players.
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -648,6 +1228,17 @@ local function createHealthBar(ship, hull, maxHealth)
 	fill.BorderSizePixel = 0
 	fill.Parent = back
 
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 14)
+	label.Position = UDim2.new(0, 0, -1, -2)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 12
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextStrokeTransparency = 0.3
+	label.Text = ship.Name
+	label.Parent = billboard
+
 	ship:GetAttributeChangedSignal("Health"):Connect(function()
 		local health = ship:GetAttribute("Health") or 0
 		local ratio = math.clamp(health / maxHealth, 0, 1)
@@ -655,10 +1246,29 @@ local function createHealthBar(ship, hull, maxHealth)
 	end)
 end
 
+-- Decorative cannon barrels sticking out both sides of the hull, purely
+-- visual (the actual firing logic lives in ShipCannons.server.lua).
+local function addCannonBarrels(ship, hull)
+	for _, side in ipairs({ -1, 1 }) do
+		local barrel = Instance.new("Part")
+		barrel.Name = "CannonBarrel"
+		barrel.Shape = Enum.PartType.Cylinder
+		barrel.Size = Vector3.new(3, 0.8, 0.8)
+		barrel.Color = Color3.fromRGB(35, 35, 38)
+		barrel.Material = Enum.Material.Metal
+		barrel.Anchored = true
+		barrel.CanCollide = false
+		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, 0, math.rad(90))
+		barrel.Parent = ship
+	end
+end
+
 local function spawnShip()
 	if #shipsFolder:GetChildren() >= Config.MaxShips then
 		return
 	end
+
+	local shipType = Config.PickShipType()
 
 	local angle = math.random() * math.pi * 2
 	local distance = math.random(80, Config.SpawnRadius)
@@ -667,14 +1277,14 @@ local function spawnShip()
 	local y = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 2
 
 	local ship = Instance.new("Model")
-	ship.Name = "Ship"
+	ship.Name = shipType.Name
 
 	local hull = Instance.new("Part")
 	hull.Name = "Hitbox"
-	hull.Size = Vector3.new(32, 6, 12)
+	hull.Size = shipType.HullSize
 	hull.CFrame = CFrame.new(x, y, z) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
 	hull.Anchored = true
-	hull.Color = Color3.fromRGB(90, 65, 45)
+	hull.Color = shipType.HullColor
 	hull.Material = Enum.Material.WoodPlanks
 	hull.Parent = ship
 
@@ -683,10 +1293,10 @@ local function spawnShip()
 	local cabin = Instance.new("Part")
 	cabin.Name = "Cabin"
 	cabin.Size = Vector3.new(8, 5, 8)
-	cabin.CFrame = hull.CFrame * CFrame.new(-6, 5, 0)
+	cabin.CFrame = hull.CFrame * CFrame.new(-hull.Size.X / 4, 5, 0)
 	cabin.Anchored = true
 	cabin.CanCollide = false
-	cabin.Color = Color3.fromRGB(120, 90, 60)
+	cabin.Color = shipType.CabinColor
 	cabin.Material = Enum.Material.Wood
 	cabin.Parent = ship
 
@@ -700,22 +1310,41 @@ local function spawnShip()
 	mast.Color = Color3.fromRGB(70, 50, 35)
 	mast.Parent = ship
 
-	local humanCount = math.random(Config.HumansPerShipMin, Config.HumansPerShipMax)
+	if shipType.HasCannon then
+		addCannonBarrels(ship, hull)
+	end
+
+	local humanCount = math.random(shipType.HumansMin, shipType.HumansMax)
 	for _ = 1, humanCount do
-		local localOffset = Vector3.new(math.random(-140, 140) / 10, 4, math.random(-50, 50) / 10)
+		local localOffset = Vector3.new(
+			math.random(-hull.Size.X * 4, hull.Size.X * 4) / 10,
+			4,
+			math.random(-hull.Size.Z * 4, hull.Size.Z * 4) / 10
+		)
 		local worldPosition = (hull.CFrame * CFrame.new(localOffset)).Position
 		local human = createHuman(worldPosition)
 		human.Parent = ship
 	end
 
-	local shipHealth = humanCount + math.random(2, 5)
+	local shipHealth = humanCount + shipType.HealthBonus + math.random(2, 5)
+	ship:SetAttribute("ShipType", shipType.Key)
 	ship:SetAttribute("HumanCount", humanCount)
 	ship:SetAttribute("Health", shipHealth)
 	ship:SetAttribute("MaxHealth", shipHealth)
 
+	if shipType.HasCannon then
+		ship:SetAttribute("CannonDamage", shipType.CannonDamage)
+		ship:SetAttribute("CannonRange", shipType.CannonRange)
+		ship:SetAttribute("CannonCooldown", shipType.CannonCooldown)
+	end
+
 	createHealthBar(ship, hull, shipHealth)
 
 	CollectionService:AddTag(hull, "Ship")
+	if shipType.HasCannon then
+		CollectionService:AddTag(hull, "Cannon")
+	end
+
 	ship.Parent = shipsFolder
 end
 
@@ -726,18 +1355,26 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX14">
+		<Item class="Script" referent="RBX17">
 			<Properties>
 				<string name="Name">ShopHandler</string>
-				<ProtectedString name="Source"><![CDATA[-- Server side of the upgrade shop: validates and applies purchases requested
--- by UpgradeShop.client.lua. The client never sets a tier or spends money
--- itself — it only asks, and this script decides.
+				<ProtectedString name="Source"><![CDATA[-- Server side of both shops:
+--  - the Money-based upgrade shop: validates and applies purchases requested
+--    by UpgradeShop.client.lua.
+--  - the Robux shop: prompts the real-money purchase dialog and wires up
+--    MarketplaceService.ProcessReceipt (see RobuxShop.lua for what's granted
+--    and its persistence caveat).
+-- The client never sets a tier, spends money, or grants itself a power
+-- directly — it only asks, and this script decides.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
+
+RobuxShop.SetupReceiptProcessing()
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -760,6 +1397,13 @@ if not UpgradeResultEvent then
 	UpgradeResultEvent.Parent = Remotes
 end
 
+local PromptRobuxPurchaseEvent = Remotes:FindFirstChild("PromptRobuxPurchase")
+if not PromptRobuxPurchaseEvent then
+	PromptRobuxPurchaseEvent = Instance.new("RemoteEvent")
+	PromptRobuxPurchaseEvent.Name = "PromptRobuxPurchase"
+	PromptRobuxPurchaseEvent.Parent = Remotes
+end
+
 PurchaseUpgradeEvent.OnServerEvent:Connect(function(player, upgradeKey)
 	if typeof(upgradeKey) ~= "string" then
 		return
@@ -773,17 +1417,26 @@ PurchaseUpgradeEvent.OnServerEvent:Connect(function(player, upgradeKey)
 		UpgradeResultEvent:FireClient(player, false, resultOrReason)
 	end
 end)
+
+PromptRobuxPurchaseEvent.OnServerEvent:Connect(function(player, productKey)
+	if typeof(productKey) ~= "string" then
+		return
+	end
+
+	RobuxShop.PromptPurchase(player, productKey)
+end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX15">
+		<Item class="Script" referent="RBX18">
 			<Properties>
 				<string name="Name">WorldSetup</string>
 				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor)
--- the first time the server starts, so the place works with no manual
--- Studio setup. Safe to re-run: it skips itself once already generated.
+-- and tunes Lighting/water visuals for a nicer ocean look, the first time
+-- the server starts. Safe to re-run: it skips itself once already generated.
 
 local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
@@ -797,6 +1450,31 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
 	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
 
+	-- Nicer water look than the flat default.
+	terrain.WaterColor = Color3.fromRGB(15, 80, 120)
+	terrain.WaterTransparency = 0.6
+	terrain.WaterReflectance = 0.15
+	terrain.WaterWaveSize = 0.15
+	terrain.WaterWaveSpeed = 8
+
+	-- Ocean-daylight lighting + a soft haze so distant rafts/ships fade in.
+	Lighting.ClockTime = 14
+	Lighting.Brightness = 2.5
+	Lighting.Ambient = Color3.fromRGB(60, 90, 110)
+	Lighting.OutdoorAmbient = Color3.fromRGB(120, 150, 170)
+	Lighting.FogColor = Color3.fromRGB(40, 90, 120)
+	Lighting.FogStart = 150
+	Lighting.FogEnd = 700
+
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.15
+	atmosphere.Color = Color3.fromRGB(180, 210, 230)
+	atmosphere.Decay = Color3.fromRGB(100, 140, 170)
+	atmosphere.Glare = 0.2
+	atmosphere.Haze = 1.2
+	atmosphere.Parent = Lighting
+
 	Workspace:SetAttribute("WaterWorldGenerated", true)
 end
 
@@ -805,15 +1483,15 @@ Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX16">
+	<Item class="StarterPlayer" referent="RBX19">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX17">
+		<Item class="StarterPlayerScripts" referent="RBX20">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX18">
+			<Item class="LocalScript" referent="RBX21">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
@@ -849,32 +1527,61 @@ label.Parent = screenGui
 
 NotifyEvent.OnClientEvent:Connect(function(data)
 	local text = string.format("+$%d  •  +%d XP  (%d humans)", data.money, data.xp, data.humans)
-	if data.leveledUp then
+	if data.evolved then
+		text = string.format("🐟 EVOLVED into a %s! Stats reset — level up again.", data.evolutionName)
+	elseif data.leveledUp then
 		text ..= string.format("   LEVEL UP! Now level %d", data.level)
 	end
 	label.Text = text
 	label.TextTransparency = 0
 	label.TextStrokeTransparency = 0.4
 
-	task.delay(2.5, function()
+	local displaySeconds = data.evolved and 4 or 2.5
+	task.delay(displaySeconds, function()
 		TweenService:Create(label, TweenInfo.new(1), {
 			TextTransparency = 1,
 			TextStrokeTransparency = 1,
 		}):Play()
 	end)
 end)
+
+-- Small "Depth Charges: N" indicator, only shown once you own at least one
+-- (a Robux consumable — see RobuxShop.lua).
+local consumables = player:WaitForChild("Consumables")
+local depthCharges = consumables:WaitForChild("DepthCharges")
+
+local depthChargeLabel = Instance.new("TextLabel")
+depthChargeLabel.Size = UDim2.new(0, 220, 0, 24)
+depthChargeLabel.Position = UDim2.new(0.5, -110, 0, 64)
+depthChargeLabel.BackgroundTransparency = 1
+depthChargeLabel.Font = Enum.Font.GothamBold
+depthChargeLabel.TextSize = 16
+depthChargeLabel.TextColor3 = Color3.fromRGB(255, 210, 90)
+depthChargeLabel.TextStrokeTransparency = 0.5
+depthChargeLabel.Visible = false
+depthChargeLabel.Parent = screenGui
+
+local function refreshDepthChargeLabel()
+	depthChargeLabel.Visible = depthCharges.Value > 0
+	depthChargeLabel.Text = "💣 Depth Charges: " .. depthCharges.Value
+end
+
+depthCharges:GetPropertyChangedSignal("Value"):Connect(refreshDepthChargeLabel)
+refreshDepthChargeLabel()
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX19">
+			<Item class="LocalScript" referent="RBX22">
 				<Properties>
 					<string name="Name">UpgradeShop</string>
-					<ProtectedString name="Source"><![CDATA[-- A small toggleable shop panel listing the three upgrades (Bite Power,
--- Armor, Fins). Costs/tiers are read directly off the replicated Upgrades
--- folder + leaderstats and computed with the same GameConfig.UpgradeCost
--- formula the server uses, so the UI always matches what a purchase will
--- actually cost. Buying just fires a request at the server — this script
--- never changes money or tiers itself.
+					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with two tabs:
+--  - "Upgrades": the six Money-based upgrades. Costs/tiers are read
+--    directly off the replicated Upgrades folder + leaderstats and computed
+--    with the same GameConfig.UpgradeCost formula the server uses, so the
+--    UI always matches what a purchase will actually cost.
+--  - "Robux Shop": the four real-money super powers. Buying just fires a
+--    request at the server, which prompts Roblox's own purchase dialog —
+--    this script never grants anything itself.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -885,8 +1592,7 @@ local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local PurchaseUpgradeEvent = Remotes:WaitForChild("PurchaseUpgrade")
 local UpgradeResultEvent = Remotes:WaitForChild("UpgradeResult")
-
-local UPGRADE_ORDER = { "AttackPower", "Armor", "SwimSpeed" }
+local PromptRobuxPurchaseEvent = Remotes:WaitForChild("PromptRobuxPurchase")
 
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -909,45 +1615,103 @@ Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(0, 8)
 
 local frame = Instance.new("Frame")
 frame.Name = "ShopFrame"
-frame.Size = UDim2.new(0, 360, 0, 250)
-frame.Position = UDim2.new(1, -380, 1, -320)
+frame.Size = UDim2.new(0, 400, 0, 420)
+frame.Position = UDim2.new(1, -420, 1, -490)
 frame.BackgroundColor3 = Color3.fromRGB(20, 30, 45)
 frame.Visible = false
 frame.Parent = screenGui
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 32)
-title.BackgroundTransparency = 1
-title.Text = "Upgrades"
-title.Font = Enum.Font.GothamBold
-title.TextSize = 20
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Parent = frame
-
-local rowsHolder = Instance.new("Frame")
-rowsHolder.Size = UDim2.new(1, -20, 1, -40)
-rowsHolder.Position = UDim2.new(0, 10, 0, 36)
-rowsHolder.BackgroundTransparency = 1
-rowsHolder.Parent = frame
-
-local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 8)
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = rowsHolder
-
 toggleButton.MouseButton1Click:Connect(function()
 	frame.Visible = not frame.Visible
 end)
 
-local rows = {}
+-- Tabs
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.new(1, -20, 0, 34)
+tabBar.Position = UDim2.new(0, 10, 0, 8)
+tabBar.BackgroundTransparency = 1
+tabBar.Parent = frame
 
-for i, key in ipairs(UPGRADE_ORDER) do
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 8)
+tabLayout.Parent = tabBar
+
+local upgradesTabButton = Instance.new("TextButton")
+upgradesTabButton.Size = UDim2.new(0, 185, 1, 0)
+upgradesTabButton.Font = Enum.Font.GothamBold
+upgradesTabButton.TextSize = 16
+upgradesTabButton.Text = "Upgrades"
+upgradesTabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+upgradesTabButton.Parent = tabBar
+Instance.new("UICorner", upgradesTabButton).CornerRadius = UDim.new(0, 6)
+
+local robuxTabButton = Instance.new("TextButton")
+robuxTabButton.Size = UDim2.new(0, 185, 1, 0)
+robuxTabButton.Font = Enum.Font.GothamBold
+robuxTabButton.TextSize = 16
+robuxTabButton.Text = "Robux Shop"
+robuxTabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+robuxTabButton.Parent = tabBar
+Instance.new("UICorner", robuxTabButton).CornerRadius = UDim.new(0, 6)
+
+local upgradesPage = Instance.new("ScrollingFrame")
+upgradesPage.Size = UDim2.new(1, -20, 1, -52)
+upgradesPage.Position = UDim2.new(0, 10, 0, 48)
+upgradesPage.BackgroundTransparency = 1
+upgradesPage.BorderSizePixel = 0
+upgradesPage.ScrollBarThickness = 6
+upgradesPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+upgradesPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+upgradesPage.Parent = frame
+
+local upgradesLayout = Instance.new("UIListLayout")
+upgradesLayout.Padding = UDim.new(0, 8)
+upgradesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+upgradesLayout.Parent = upgradesPage
+
+local robuxPage = Instance.new("ScrollingFrame")
+robuxPage.Size = UDim2.new(1, -20, 1, -52)
+robuxPage.Position = UDim2.new(0, 10, 0, 48)
+robuxPage.BackgroundTransparency = 1
+robuxPage.BorderSizePixel = 0
+robuxPage.ScrollBarThickness = 6
+robuxPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+robuxPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+robuxPage.Visible = false
+robuxPage.Parent = frame
+
+local robuxLayout = Instance.new("UIListLayout")
+robuxLayout.Padding = UDim.new(0, 8)
+robuxLayout.SortOrder = Enum.SortOrder.LayoutOrder
+robuxLayout.Parent = robuxPage
+
+local function setActiveTab(name)
+	local upgradesActive = name == "Upgrades"
+	upgradesPage.Visible = upgradesActive
+	robuxPage.Visible = not upgradesActive
+	upgradesTabButton.BackgroundColor3 = upgradesActive and Color3.fromRGB(30, 90, 140) or Color3.fromRGB(40, 48, 60)
+	robuxTabButton.BackgroundColor3 = (not upgradesActive) and Color3.fromRGB(140, 100, 20) or Color3.fromRGB(40, 48, 60)
+end
+
+upgradesTabButton.MouseButton1Click:Connect(function()
+	setActiveTab("Upgrades")
+end)
+robuxTabButton.MouseButton1Click:Connect(function()
+	setActiveTab("Robux")
+end)
+setActiveTab("Upgrades")
+
+-- Upgrade rows
+local upgradeRows = {}
+
+for i, key in ipairs(Config.UpgradeOrder) do
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, 0, 0, 62)
 	row.BackgroundColor3 = Color3.fromRGB(35, 48, 68)
 	row.LayoutOrder = i
-	row.Parent = rowsHolder
+	row.Parent = upgradesPage
 	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
 
 	local nameLabel = Instance.new("TextLabel")
@@ -985,18 +1749,18 @@ for i, key in ipairs(UPGRADE_ORDER) do
 		PurchaseUpgradeEvent:FireServer(key)
 	end)
 
-	rows[key] = { name = nameLabel, desc = descLabel, buy = buyButton }
+	upgradeRows[key] = { name = nameLabel, desc = descLabel, buy = buyButton }
 end
 
 local upgradesFolder = player:WaitForChild("Upgrades")
 local leaderstats = player:WaitForChild("leaderstats")
 
-local function refreshRow(key)
+local function refreshUpgradeRow(key)
 	local upgradeConfig = Config.Upgrades[key]
 	local tier = upgradesFolder[key].Value
 	local maxed = tier >= upgradeConfig.MaxTier
 
-	local row = rows[key]
+	local row = upgradeRows[key]
 	row.name.Text = string.format("%s (Tier %d/%d)", upgradeConfig.Name, tier, upgradeConfig.MaxTier)
 	row.desc.Text = upgradeConfig.Description
 
@@ -1011,18 +1775,18 @@ local function refreshRow(key)
 	end
 end
 
-local function refreshAll()
-	for _, key in ipairs(UPGRADE_ORDER) do
-		refreshRow(key)
+local function refreshAllUpgradeRows()
+	for _, key in ipairs(Config.UpgradeOrder) do
+		refreshUpgradeRow(key)
 	end
 end
 
-for _, key in ipairs(UPGRADE_ORDER) do
-	upgradesFolder[key]:GetPropertyChangedSignal("Value"):Connect(refreshAll)
+for _, key in ipairs(Config.UpgradeOrder) do
+	upgradesFolder[key]:GetPropertyChangedSignal("Value"):Connect(refreshAllUpgradeRows)
 end
-leaderstats.Money:GetPropertyChangedSignal("Value"):Connect(refreshAll)
+leaderstats.Money:GetPropertyChangedSignal("Value"):Connect(refreshAllUpgradeRows)
 
-refreshAll()
+refreshAllUpgradeRows()
 
 UpgradeResultEvent.OnClientEvent:Connect(function(success, reason)
 	if success then
@@ -1034,6 +1798,54 @@ UpgradeResultEvent.OnClientEvent:Connect(function(success, reason)
 		toggleButton.Text = original
 	end)
 end)
+
+-- Robux rows
+for i, product in ipairs(Config.RobuxProducts) do
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 68)
+	row.BackgroundColor3 = Color3.fromRGB(50, 42, 25)
+	row.LayoutOrder = i
+	row.Parent = robuxPage
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(0.65, 0, 0, 22)
+	nameLabel.Position = UDim2.new(0, 10, 0, 4)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 16
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextColor3 = Color3.fromRGB(255, 220, 130)
+	nameLabel.Text = product.Name
+	nameLabel.Parent = row
+
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Size = UDim2.new(0.65, 0, 0, 38)
+	descLabel.Position = UDim2.new(0, 10, 0, 24)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextSize = 13
+	descLabel.TextWrapped = true
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.TextColor3 = Color3.fromRGB(210, 205, 190)
+	descLabel.Text = product.Description
+	descLabel.Parent = row
+
+	local buyButton = Instance.new("TextButton")
+	buyButton.Size = UDim2.new(0, 90, 0, 34)
+	buyButton.Position = UDim2.new(1, -100, 0.5, -17)
+	buyButton.Font = Enum.Font.GothamBold
+	buyButton.TextSize = 14
+	buyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	buyButton.BackgroundColor3 = Color3.fromRGB(140, 100, 20)
+	buyButton.Text = product.DisplayPriceHint or "Buy"
+	buyButton.Parent = row
+	Instance.new("UICorner", buyButton).CornerRadius = UDim.new(0, 6)
+
+	buyButton.MouseButton1Click:Connect(function()
+		PromptRobuxPurchaseEvent:FireServer(product.Key)
+	end)
+end
 ]]></ProtectedString>
 				</Properties>
 			</Item>
