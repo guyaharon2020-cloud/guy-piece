@@ -32,7 +32,7 @@ local function onRaftTagged(hitbox)
 		connection:Disconnect()
 
 		local humanCount = raft:GetAttribute("HumanCount") or 0
-		PlayerProgress.AwardRaftDestruction(player, humanCount)
+		PlayerProgress.AwardHumansDestroyed(player, humanCount)
 
 		raft:Destroy()
 	end)

@@ -3,6 +3,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
+local PlayerUpgrades = require(script.Parent.PlayerUpgrades)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -46,6 +47,9 @@ function PlayerProgress.Init(player)
 	leaderstats.Parent = player
 end
 
+-- Recomputes the creature's Humanoid stats from scratch (level + shop
+-- upgrades combined) and applies them. Call this after a level-up or after
+-- a shop purchase — it's cheap and idempotent, so no need to track deltas.
 function PlayerProgress.ApplyLevelStats(player)
 	local character = player.Character
 	local leaderstats = player:FindFirstChild("leaderstats")
@@ -59,7 +63,13 @@ function PlayerProgress.ApplyLevelStats(player)
 	end
 
 	local level = leaderstats.Level.Value
-	humanoid.WalkSpeed = Config.BaseWalkSpeed + (level - 1) * Config.WalkSpeedPerLevel
+	local levelSpeedBonus = (level - 1) * Config.WalkSpeedPerLevel
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
+
+	local previousMaxHealth = humanoid.MaxHealth
+	local newMaxHealth = 100 + PlayerUpgrades.GetExtraMaxHealth(player)
+	humanoid.MaxHealth = newMaxHealth
+	humanoid.Health = math.min(newMaxHealth, humanoid.Health + math.max(0, newMaxHealth - previousMaxHealth))
 
 	local scale = 1 + (level - 1) * Config.SizePerLevel
 	pcall(function()
@@ -67,9 +77,10 @@ function PlayerProgress.ApplyLevelStats(player)
 	end)
 end
 
--- Called when a player's creature destroys a raft. humanCount is how many
--- humans were on that raft — money and XP both scale with it directly.
-function PlayerProgress.AwardRaftDestruction(player, humanCount)
+-- Called when a player's creature destroys a raft or sinks a ship.
+-- humanCount is how many humans were aboard — money and XP both scale with
+-- it directly.
+function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 	if humanCount <= 0 then
 		return
 	end

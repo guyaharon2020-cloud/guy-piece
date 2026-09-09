@@ -1,20 +1,20 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
 	<External>null</External>
 	<External>null</External>
-	<Item class="Workspace" referent="RBX_Workspace">
+	<Item class="Workspace" referent="RBX1">
 		<Properties>
 			<string name="Name">Workspace</string>
 		</Properties>
 	</Item>
-	<Item class="ReplicatedStorage" referent="RBX_ReplicatedStorage">
+	<Item class="ReplicatedStorage" referent="RBX2">
 		<Properties>
 			<string name="Name">ReplicatedStorage</string>
 		</Properties>
-		<Item class="Folder" referent="RBX_RS_Modules">
+		<Item class="Folder" referent="RBX3">
 			<Properties>
 				<string name="Name">Modules</string>
 			</Properties>
-			<Item class="ModuleScript" referent="RBX_GameConfig">
+			<Item class="ModuleScript" referent="RBX4">
 				<Properties>
 					<string name="Name">GameConfig</string>
 					<ProtectedString name="Source"><![CDATA[-- Shared tuning values for the water-creature game.
@@ -48,45 +48,61 @@ function Config.XPForLevel(level)
 	return math.floor(100 * level ^ 1.35)
 end
 
+-- Ships: bigger, tougher targets than rafts. They carry more humans (a
+-- bigger payout) but take several hits to sink and hit back while you're
+-- attacking them, so the shop upgrades below matter most here.
+Config.ShipSpawnInterval = 25
+Config.MaxShips = 4
+Config.HumansPerShipMin = 8
+Config.HumansPerShipMax = 15
+Config.ShipContactDamage = 15 -- base damage dealt to the player per hit landed
+Config.ShipTouchCooldown = 1 -- seconds between hits registering against the same ship
+
+-- Upgrade shop: tiers bought with Money (leaderstat), 0 = not purchased yet.
+Config.Upgrades = {
+	AttackPower = {
+		Name = "Bite Power",
+		Description = "Deal more damage per hit against ships.",
+		MaxTier = 9,
+		BaseCost = 15,
+		CostGrowth = 1.6,
+	},
+	Armor = {
+		Name = "Armor",
+		Description = "More max health and less damage taken from ships.",
+		MaxTier = 9,
+		BaseCost = 15,
+		CostGrowth = 1.6,
+		HealthPerTier = 20,
+		DamageReductionPerTier = 1.5,
+	},
+	SwimSpeed = {
+		Name = "Fins",
+		Description = "Swim faster.",
+		MaxTier = 9,
+		BaseCost = 12,
+		CostGrowth = 1.5,
+		SpeedPerTier = 4,
+	},
+}
+
+-- Cost to go from `currentTier` to `currentTier + 1` for the given upgrade.
+function Config.UpgradeCost(upgradeKey, currentTier)
+	local upgrade = Config.Upgrades[upgradeKey]
+	return math.floor(upgrade.BaseCost * (upgrade.CostGrowth ^ currentTier))
+end
+
 return Config
 ]]></ProtectedString>
 				</Properties>
 			</Item>
 		</Item>
 	</Item>
-	<Item class="ServerScriptService" referent="RBX_ServerScriptService">
+	<Item class="ServerScriptService" referent="RBX5">
 		<Properties>
 			<string name="Name">ServerScriptService</string>
 		</Properties>
-		<Item class="Script" referent="RBX_WorldSetup">
-			<Properties>
-				<string name="Name">WorldSetup</string>
-				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor)
--- the first time the server starts, so the place works with no manual
--- Studio setup. Safe to re-run: it skips itself once already generated.
-
-local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Config = require(ReplicatedStorage.Modules.GameConfig)
-
-if not Workspace:GetAttribute("WaterWorldGenerated") then
-	local terrain = Workspace.Terrain
-
-	terrain:FillBlock(CFrame.new(Config.WaterCenter), Config.WaterSize, Enum.Material.Water)
-
-	local seabedCenter = Config.WaterCenter - Vector3.new(0, Config.WaterSize.Y / 2 + 5, 0)
-	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
-	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
-
-	Workspace:SetAttribute("WaterWorldGenerated", true)
-end
-
-Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
-]]></ProtectedString>
-			</Properties>
-		</Item>
-		<Item class="Script" referent="RBX_GameManager">
+		<Item class="Script" referent="RBX6">
 			<Properties>
 				<string name="Name">GameManager</string>
 				<ProtectedString name="Source"><![CDATA[-- Bootstraps player progress (leaderstats) on join and re-applies level-based
@@ -96,9 +112,11 @@ local Players = game:GetService("Players")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
 
 local function onPlayerAdded(player)
 	PlayerProgress.Init(player)
+	PlayerUpgrades.Init(player)
 
 	player.CharacterAdded:Connect(function()
 		task.wait(0.5) -- let the Humanoid finish rigging before we touch it
@@ -114,7 +132,288 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX_RaftSpawner">
+		<Item class="Folder" referent="RBX7">
+			<Properties>
+				<string name="Name">Modules</string>
+			</Properties>
+			<Item class="ModuleScript" referent="RBX8">
+				<Properties>
+					<string name="Name">PlayerProgress</string>
+					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP) and the reward/level-up math.
+-- Server-authoritative: only server scripts call into this, never the client.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+local PlayerUpgrades = require(script.Parent.PlayerUpgrades)
+
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if not Remotes then
+	Remotes = Instance.new("Folder")
+	Remotes.Name = "Remotes"
+	Remotes.Parent = ReplicatedStorage
+end
+
+local NotifyEvent = Remotes:FindFirstChild("Notify")
+if not NotifyEvent then
+	NotifyEvent = Instance.new("RemoteEvent")
+	NotifyEvent.Name = "Notify"
+	NotifyEvent.Parent = Remotes
+end
+
+local PlayerProgress = {}
+
+function PlayerProgress.Init(player)
+	if player:FindFirstChild("leaderstats") then
+		return
+	end
+
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+
+	local level = Instance.new("IntValue")
+	level.Name = "Level"
+	level.Value = 1
+	level.Parent = leaderstats
+
+	local money = Instance.new("IntValue")
+	money.Name = "Money"
+	money.Value = 0
+	money.Parent = leaderstats
+
+	local xp = Instance.new("IntValue")
+	xp.Name = "XP"
+	xp.Value = 0
+	xp.Parent = leaderstats
+
+	leaderstats.Parent = player
+end
+
+-- Recomputes the creature's Humanoid stats from scratch (level + shop
+-- upgrades combined) and applies them. Call this after a level-up or after
+-- a shop purchase — it's cheap and idempotent, so no need to track deltas.
+function PlayerProgress.ApplyLevelStats(player)
+	local character = player.Character
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not character or not leaderstats then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	local level = leaderstats.Level.Value
+	local levelSpeedBonus = (level - 1) * Config.WalkSpeedPerLevel
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
+
+	local previousMaxHealth = humanoid.MaxHealth
+	local newMaxHealth = 100 + PlayerUpgrades.GetExtraMaxHealth(player)
+	humanoid.MaxHealth = newMaxHealth
+	humanoid.Health = math.min(newMaxHealth, humanoid.Health + math.max(0, newMaxHealth - previousMaxHealth))
+
+	local scale = 1 + (level - 1) * Config.SizePerLevel
+	pcall(function()
+		character:ScaleTo(scale)
+	end)
+end
+
+-- Called when a player's creature destroys a raft or sinks a ship.
+-- humanCount is how many humans were aboard — money and XP both scale with
+-- it directly.
+function PlayerProgress.AwardHumansDestroyed(player, humanCount)
+	if humanCount <= 0 then
+		return
+	end
+
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not leaderstats then
+		return
+	end
+
+	local moneyEarned = humanCount * Config.MoneyPerHuman
+	local xpEarned = humanCount * Config.XPPerHuman
+
+	leaderstats.Money.Value += moneyEarned
+
+	local levelValue = leaderstats.Level
+	local xpValue = leaderstats.XP
+	local leveledUp = false
+
+	xpValue.Value += xpEarned
+
+	while levelValue.Value < Config.MaxLevel and xpValue.Value >= Config.XPForLevel(levelValue.Value) do
+		xpValue.Value -= Config.XPForLevel(levelValue.Value)
+		levelValue.Value += 1
+		leveledUp = true
+	end
+
+	if leveledUp then
+		PlayerProgress.ApplyLevelStats(player)
+	end
+
+	NotifyEvent:FireClient(player, {
+		humans = humanCount,
+		money = moneyEarned,
+		xp = xpEarned,
+		leveledUp = leveledUp,
+		level = levelValue.Value,
+	})
+end
+
+return PlayerProgress
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX9">
+				<Properties>
+					<string name="Name">PlayerUpgrades</string>
+					<ProtectedString name="Source"><![CDATA[-- Owns each player's shop upgrade tiers (a non-leaderstat "Upgrades" folder,
+-- so it doesn't clutter the player list) and the purchase logic.
+-- Server-authoritative: the client only ever asks to purchase, never sets a
+-- tier directly.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local UPGRADE_KEYS = { "AttackPower", "Armor", "SwimSpeed" }
+
+local PlayerUpgrades = {}
+
+function PlayerUpgrades.Init(player)
+	if player:FindFirstChild("Upgrades") then
+		return
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Upgrades"
+
+	for _, key in ipairs(UPGRADE_KEYS) do
+		local tier = Instance.new("IntValue")
+		tier.Name = key
+		tier.Value = 0
+		tier.Parent = folder
+	end
+
+	folder.Parent = player
+end
+
+function PlayerUpgrades.GetTier(player, key)
+	local folder = player:FindFirstChild("Upgrades")
+	return folder and folder[key].Value or 0
+end
+
+function PlayerUpgrades.GetAttackPower(player)
+	return 1 + PlayerUpgrades.GetTier(player, "AttackPower")
+end
+
+function PlayerUpgrades.GetExtraMaxHealth(player)
+	return PlayerUpgrades.GetTier(player, "Armor") * Config.Upgrades.Armor.HealthPerTier
+end
+
+function PlayerUpgrades.GetShipDamageTaken(player)
+	local armorTier = PlayerUpgrades.GetTier(player, "Armor")
+	local reduction = armorTier * Config.Upgrades.Armor.DamageReductionPerTier
+	return math.max(2, Config.ShipContactDamage - reduction)
+end
+
+function PlayerUpgrades.GetExtraWalkSpeed(player)
+	return PlayerUpgrades.GetTier(player, "SwimSpeed") * Config.Upgrades.SwimSpeed.SpeedPerTier
+end
+
+-- Attempts to buy the next tier of `key` for `player`. Returns
+-- (true, newTier) on success or (false, reason) on failure.
+function PlayerUpgrades.Purchase(player, key)
+	local upgradeConfig = Config.Upgrades[key]
+	if not upgradeConfig then
+		return false, "Unknown upgrade"
+	end
+
+	local folder = player:FindFirstChild("Upgrades")
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not folder or not leaderstats then
+		return false, "Not ready"
+	end
+
+	local tierValue = folder[key]
+	if tierValue.Value >= upgradeConfig.MaxTier then
+		return false, "Already maxed"
+	end
+
+	local cost = Config.UpgradeCost(key, tierValue.Value)
+	if leaderstats.Money.Value < cost then
+		return false, "Not enough money"
+	end
+
+	leaderstats.Money.Value -= cost
+	tierValue.Value += 1
+
+	return true, tierValue.Value
+end
+
+return PlayerUpgrades
+]]></ProtectedString>
+				</Properties>
+			</Item>
+		</Item>
+		<Item class="Script" referent="RBX10">
+			<Properties>
+				<string name="Name">RaftDestruction</string>
+				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
+-- as soon as a player's creature touches it, paying that player based on how
+-- many humans were riding it.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+
+local debounced = {}
+
+local function onRaftTagged(hitbox)
+	local raft = hitbox.Parent
+	if not raft then
+		return
+	end
+
+	local connection
+	connection = hitbox.Touched:Connect(function(otherPart)
+		if debounced[hitbox] then
+			return
+		end
+
+		local character = otherPart.Parent
+		local player = character and Players:GetPlayerFromCharacter(character)
+		if not player then
+			return
+		end
+
+		debounced[hitbox] = true
+		connection:Disconnect()
+
+		local humanCount = raft:GetAttribute("HumanCount") or 0
+		PlayerProgress.AwardHumansDestroyed(player, humanCount)
+
+		raft:Destroy()
+	end)
+
+	hitbox.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			debounced[hitbox] = nil
+		end
+	end)
+end
+
+CollectionService:GetInstanceAddedSignal("Raft"):Connect(onRaftTagged)
+
+for _, hitbox in ipairs(CollectionService:GetTagged("Raft")) do
+	onRaftTagged(hitbox)
+end
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX11">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -205,75 +504,240 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX_RaftDestruction">
+		<Item class="Script" referent="RBX12">
 			<Properties>
-				<string name="Name">RaftDestruction</string>
-				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
--- as soon as a player's creature touches it, paying that player based on how
--- many humans were riding it.
+				<string name="Name">ShipCombat</string>
+				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
+-- combat: each hit reduces the ship's Health by the attacking player's
+-- AttackPower upgrade, and the ship hits back for contact damage (reduced
+-- by the player's Armor upgrade). The ship sinks and pays out once Health
+-- reaches 0.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
 
-local debounced = {}
+local lastHitAt = {}
 
-local function onRaftTagged(hitbox)
-	local raft = hitbox.Parent
-	if not raft then
+local function onShipTagged(hull)
+	local ship = hull.Parent
+	if not ship then
 		return
 	end
 
 	local connection
-	connection = hitbox.Touched:Connect(function(otherPart)
-		if debounced[hitbox] then
-			return
-		end
-
+	connection = hull.Touched:Connect(function(otherPart)
 		local character = otherPart.Parent
 		local player = character and Players:GetPlayerFromCharacter(character)
 		if not player then
 			return
 		end
 
-		debounced[hitbox] = true
-		connection:Disconnect()
+		local now = os.clock()
+		if lastHitAt[hull] and now - lastHitAt[hull] < Config.ShipTouchCooldown then
+			return
+		end
+		lastHitAt[hull] = now
 
-		local humanCount = raft:GetAttribute("HumanCount") or 0
-		PlayerProgress.AwardRaftDestruction(player, humanCount)
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.Health > 0 then
+			humanoid:TakeDamage(PlayerUpgrades.GetShipDamageTaken(player))
+		end
 
-		raft:Destroy()
+		local remainingHealth = (ship:GetAttribute("Health") or 0) - PlayerUpgrades.GetAttackPower(player)
+		ship:SetAttribute("Health", remainingHealth)
+
+		if remainingHealth <= 0 then
+			connection:Disconnect()
+			lastHitAt[hull] = nil
+
+			local humanCount = ship:GetAttribute("HumanCount") or 0
+			PlayerProgress.AwardHumansDestroyed(player, humanCount)
+
+			ship:Destroy()
+		end
 	end)
 
-	hitbox.AncestryChanged:Connect(function(_, parent)
+	hull.AncestryChanged:Connect(function(_, parent)
 		if not parent then
-			debounced[hitbox] = nil
+			lastHitAt[hull] = nil
 		end
 	end)
 end
 
-CollectionService:GetInstanceAddedSignal("Raft"):Connect(onRaftTagged)
+CollectionService:GetInstanceAddedSignal("Ship"):Connect(onShipTagged)
 
-for _, hitbox in ipairs(CollectionService:GetTagged("Raft")) do
-	onRaftTagged(hitbox)
+for _, hull in ipairs(CollectionService:GetTagged("Ship")) do
+	onShipTagged(hull)
 end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Folder" referent="RBX_SSS_Modules">
+		<Item class="Script" referent="RBX13">
 			<Properties>
-				<string name="Name">Modules</string>
+				<string name="Name">ShipSpawner</string>
+				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts. Ships carry
+-- more humans (a bigger payout) but have a Health pool and hit back while
+-- being attacked, so upgrading in the shop pays off most against these.
+
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local shipsFolder = Workspace:FindFirstChild("Ships")
+if not shipsFolder then
+	shipsFolder = Instance.new("Folder")
+	shipsFolder.Name = "Ships"
+	shipsFolder.Parent = Workspace
+end
+
+local function createHuman(position)
+	local human = Instance.new("Model")
+	human.Name = "Human"
+
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Size = Vector3.new(1, 2, 1)
+	body.CFrame = CFrame.new(position)
+	body.Anchored = true
+	body.CanCollide = false
+	body.Color = Color3.fromRGB(240, 200, 160)
+	body.Parent = human
+
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Shape = Enum.PartType.Ball
+	head.Size = Vector3.new(0.8, 0.8, 0.8)
+	head.CFrame = CFrame.new(position + Vector3.new(0, 1.4, 0))
+	head.Anchored = true
+	head.CanCollide = false
+	head.Color = Color3.fromRGB(255, 224, 189)
+	head.Parent = human
+
+	human.PrimaryPart = body
+	return human
+end
+
+-- A small floating bar above the ship's hull showing remaining Health, so
+-- players can see how many more hits a ship needs.
+local function createHealthBar(ship, hull, maxHealth)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "HealthBar"
+	billboard.Size = UDim2.new(0, 140, 0, 16)
+	billboard.StudsOffset = Vector3.new(0, 8, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Parent = hull
+
+	local back = Instance.new("Frame")
+	back.Size = UDim2.new(1, 0, 1, 0)
+	back.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	back.BorderSizePixel = 0
+	back.Parent = billboard
+
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.new(1, 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+	fill.BorderSizePixel = 0
+	fill.Parent = back
+
+	ship:GetAttributeChangedSignal("Health"):Connect(function()
+		local health = ship:GetAttribute("Health") or 0
+		local ratio = math.clamp(health / maxHealth, 0, 1)
+		fill.Size = UDim2.new(ratio, 0, 1, 0)
+	end)
+end
+
+local function spawnShip()
+	if #shipsFolder:GetChildren() >= Config.MaxShips then
+		return
+	end
+
+	local angle = math.random() * math.pi * 2
+	local distance = math.random(80, Config.SpawnRadius)
+	local x = Config.WaterCenter.X + math.cos(angle) * distance
+	local z = Config.WaterCenter.Z + math.sin(angle) * distance
+	local y = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 2
+
+	local ship = Instance.new("Model")
+	ship.Name = "Ship"
+
+	local hull = Instance.new("Part")
+	hull.Name = "Hitbox"
+	hull.Size = Vector3.new(32, 6, 12)
+	hull.CFrame = CFrame.new(x, y, z) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
+	hull.Anchored = true
+	hull.Color = Color3.fromRGB(90, 65, 45)
+	hull.Material = Enum.Material.WoodPlanks
+	hull.Parent = ship
+
+	ship.PrimaryPart = hull
+
+	local cabin = Instance.new("Part")
+	cabin.Name = "Cabin"
+	cabin.Size = Vector3.new(8, 5, 8)
+	cabin.CFrame = hull.CFrame * CFrame.new(-6, 5, 0)
+	cabin.Anchored = true
+	cabin.CanCollide = false
+	cabin.Color = Color3.fromRGB(120, 90, 60)
+	cabin.Material = Enum.Material.Wood
+	cabin.Parent = ship
+
+	local mast = Instance.new("Part")
+	mast.Name = "Mast"
+	mast.Shape = Enum.PartType.Cylinder
+	mast.Size = Vector3.new(18, 1, 1)
+	mast.CFrame = hull.CFrame * CFrame.new(2, 9, 0) * CFrame.Angles(0, 0, math.rad(90))
+	mast.Anchored = true
+	mast.CanCollide = false
+	mast.Color = Color3.fromRGB(70, 50, 35)
+	mast.Parent = ship
+
+	local humanCount = math.random(Config.HumansPerShipMin, Config.HumansPerShipMax)
+	for _ = 1, humanCount do
+		local localOffset = Vector3.new(math.random(-140, 140) / 10, 4, math.random(-50, 50) / 10)
+		local worldPosition = (hull.CFrame * CFrame.new(localOffset)).Position
+		local human = createHuman(worldPosition)
+		human.Parent = ship
+	end
+
+	local shipHealth = humanCount + math.random(2, 5)
+	ship:SetAttribute("HumanCount", humanCount)
+	ship:SetAttribute("Health", shipHealth)
+	ship:SetAttribute("MaxHealth", shipHealth)
+
+	createHealthBar(ship, hull, shipHealth)
+
+	CollectionService:AddTag(hull, "Ship")
+	ship.Parent = shipsFolder
+end
+
+while true do
+	spawnShip()
+	task.wait(Config.ShipSpawnInterval)
+end
+]]></ProtectedString>
 			</Properties>
-			<Item class="ModuleScript" referent="RBX_PlayerProgress">
-				<Properties>
-					<string name="Name">PlayerProgress</string>
-					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP) and the reward/level-up math.
--- Server-authoritative: only server scripts call into this, never the client.
+		</Item>
+		<Item class="Script" referent="RBX14">
+			<Properties>
+				<string name="Name">ShopHandler</string>
+				<ProtectedString name="Source"><![CDATA[-- Server side of the upgrade shop: validates and applies purchases requested
+-- by UpgradeShop.client.lua. The client never sets a tier or spends money
+-- itself — it only asks, and this script decides.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Config = require(ReplicatedStorage.Modules.GameConfig)
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -282,119 +746,74 @@ if not Remotes then
 	Remotes.Parent = ReplicatedStorage
 end
 
-local NotifyEvent = Remotes:FindFirstChild("Notify")
-if not NotifyEvent then
-	NotifyEvent = Instance.new("RemoteEvent")
-	NotifyEvent.Name = "Notify"
-	NotifyEvent.Parent = Remotes
+local PurchaseUpgradeEvent = Remotes:FindFirstChild("PurchaseUpgrade")
+if not PurchaseUpgradeEvent then
+	PurchaseUpgradeEvent = Instance.new("RemoteEvent")
+	PurchaseUpgradeEvent.Name = "PurchaseUpgrade"
+	PurchaseUpgradeEvent.Parent = Remotes
 end
 
-local PlayerProgress = {}
-
-function PlayerProgress.Init(player)
-	if player:FindFirstChild("leaderstats") then
-		return
-	end
-
-	local leaderstats = Instance.new("Folder")
-	leaderstats.Name = "leaderstats"
-
-	local level = Instance.new("IntValue")
-	level.Name = "Level"
-	level.Value = 1
-	level.Parent = leaderstats
-
-	local money = Instance.new("IntValue")
-	money.Name = "Money"
-	money.Value = 0
-	money.Parent = leaderstats
-
-	local xp = Instance.new("IntValue")
-	xp.Name = "XP"
-	xp.Value = 0
-	xp.Parent = leaderstats
-
-	leaderstats.Parent = player
+local UpgradeResultEvent = Remotes:FindFirstChild("UpgradeResult")
+if not UpgradeResultEvent then
+	UpgradeResultEvent = Instance.new("RemoteEvent")
+	UpgradeResultEvent.Name = "UpgradeResult"
+	UpgradeResultEvent.Parent = Remotes
 end
 
-function PlayerProgress.ApplyLevelStats(player)
-	local character = player.Character
-	local leaderstats = player:FindFirstChild("leaderstats")
-	if not character or not leaderstats then
+PurchaseUpgradeEvent.OnServerEvent:Connect(function(player, upgradeKey)
+	if typeof(upgradeKey) ~= "string" then
 		return
 	end
 
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	local level = leaderstats.Level.Value
-	humanoid.WalkSpeed = Config.BaseWalkSpeed + (level - 1) * Config.WalkSpeedPerLevel
-
-	local scale = 1 + (level - 1) * Config.SizePerLevel
-	pcall(function()
-		character:ScaleTo(scale)
-	end)
-end
-
--- Called when a player's creature destroys a raft. humanCount is how many
--- humans were on that raft — money and XP both scale with it directly.
-function PlayerProgress.AwardRaftDestruction(player, humanCount)
-	if humanCount <= 0 then
-		return
-	end
-
-	local leaderstats = player:FindFirstChild("leaderstats")
-	if not leaderstats then
-		return
-	end
-
-	local moneyEarned = humanCount * Config.MoneyPerHuman
-	local xpEarned = humanCount * Config.XPPerHuman
-
-	leaderstats.Money.Value += moneyEarned
-
-	local levelValue = leaderstats.Level
-	local xpValue = leaderstats.XP
-	local leveledUp = false
-
-	xpValue.Value += xpEarned
-
-	while levelValue.Value < Config.MaxLevel and xpValue.Value >= Config.XPForLevel(levelValue.Value) do
-		xpValue.Value -= Config.XPForLevel(levelValue.Value)
-		levelValue.Value += 1
-		leveledUp = true
-	end
-
-	if leveledUp then
+	local success, resultOrReason = PlayerUpgrades.Purchase(player, upgradeKey)
+	if success then
 		PlayerProgress.ApplyLevelStats(player)
+		UpgradeResultEvent:FireClient(player, true)
+	else
+		UpgradeResultEvent:FireClient(player, false, resultOrReason)
 	end
+end)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX15">
+			<Properties>
+				<string name="Name">WorldSetup</string>
+				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor)
+-- the first time the server starts, so the place works with no manual
+-- Studio setup. Safe to re-run: it skips itself once already generated.
 
-	NotifyEvent:FireClient(player, {
-		humans = humanCount,
-		money = moneyEarned,
-		xp = xpEarned,
-		leveledUp = leveledUp,
-		level = levelValue.Value,
-	})
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+if not Workspace:GetAttribute("WaterWorldGenerated") then
+	local terrain = Workspace.Terrain
+
+	terrain:FillBlock(CFrame.new(Config.WaterCenter), Config.WaterSize, Enum.Material.Water)
+
+	local seabedCenter = Config.WaterCenter - Vector3.new(0, Config.WaterSize.Y / 2 + 5, 0)
+	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
+	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
+
+	Workspace:SetAttribute("WaterWorldGenerated", true)
 end
 
-return PlayerProgress
+Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
 ]]></ProtectedString>
-				</Properties>
-			</Item>
+			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX_StarterPlayer">
+	<Item class="StarterPlayer" referent="RBX16">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX_StarterPlayerScripts">
+		<Item class="StarterPlayerScripts" referent="RBX17">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX_CreatureHud">
+			<Item class="LocalScript" referent="RBX18">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
@@ -442,6 +861,177 @@ NotifyEvent.OnClientEvent:Connect(function(data)
 			TextTransparency = 1,
 			TextStrokeTransparency = 1,
 		}):Play()
+	end)
+end)
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="LocalScript" referent="RBX19">
+				<Properties>
+					<string name="Name">UpgradeShop</string>
+					<ProtectedString name="Source"><![CDATA[-- A small toggleable shop panel listing the three upgrades (Bite Power,
+-- Armor, Fins). Costs/tiers are read directly off the replicated Upgrades
+-- folder + leaderstats and computed with the same GameConfig.UpgradeCost
+-- formula the server uses, so the UI always matches what a purchase will
+-- actually cost. Buying just fires a request at the server — this script
+-- never changes money or tiers itself.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local player = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local PurchaseUpgradeEvent = Remotes:WaitForChild("PurchaseUpgrade")
+local UpgradeResultEvent = Remotes:WaitForChild("UpgradeResult")
+
+local UPGRADE_ORDER = { "AttackPower", "Armor", "SwimSpeed" }
+
+local playerGui = player:WaitForChild("PlayerGui")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "UpgradeShop"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ShopToggle"
+toggleButton.Size = UDim2.new(0, 110, 0, 40)
+toggleButton.Position = UDim2.new(1, -130, 1, -60)
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.TextSize = 20
+toggleButton.Text = "Shop"
+toggleButton.BackgroundColor3 = Color3.fromRGB(30, 90, 140)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Parent = screenGui
+Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(0, 8)
+
+local frame = Instance.new("Frame")
+frame.Name = "ShopFrame"
+frame.Size = UDim2.new(0, 360, 0, 250)
+frame.Position = UDim2.new(1, -380, 1, -320)
+frame.BackgroundColor3 = Color3.fromRGB(20, 30, 45)
+frame.Visible = false
+frame.Parent = screenGui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 32)
+title.BackgroundTransparency = 1
+title.Text = "Upgrades"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Parent = frame
+
+local rowsHolder = Instance.new("Frame")
+rowsHolder.Size = UDim2.new(1, -20, 1, -40)
+rowsHolder.Position = UDim2.new(0, 10, 0, 36)
+rowsHolder.BackgroundTransparency = 1
+rowsHolder.Parent = frame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 8)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = rowsHolder
+
+toggleButton.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
+
+local rows = {}
+
+for i, key in ipairs(UPGRADE_ORDER) do
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 62)
+	row.BackgroundColor3 = Color3.fromRGB(35, 48, 68)
+	row.LayoutOrder = i
+	row.Parent = rowsHolder
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(0.65, 0, 0, 22)
+	nameLabel.Position = UDim2.new(0, 10, 0, 4)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 16
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.Parent = row
+
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Size = UDim2.new(0.65, 0, 0, 32)
+	descLabel.Position = UDim2.new(0, 10, 0, 24)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextSize = 13
+	descLabel.TextWrapped = true
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.TextColor3 = Color3.fromRGB(200, 210, 220)
+	descLabel.Parent = row
+
+	local buyButton = Instance.new("TextButton")
+	buyButton.Size = UDim2.new(0, 90, 0, 34)
+	buyButton.Position = UDim2.new(1, -100, 0.5, -17)
+	buyButton.Font = Enum.Font.GothamBold
+	buyButton.TextSize = 15
+	buyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	buyButton.BackgroundColor3 = Color3.fromRGB(40, 140, 80)
+	buyButton.Parent = row
+	Instance.new("UICorner", buyButton).CornerRadius = UDim.new(0, 6)
+
+	buyButton.MouseButton1Click:Connect(function()
+		PurchaseUpgradeEvent:FireServer(key)
+	end)
+
+	rows[key] = { name = nameLabel, desc = descLabel, buy = buyButton }
+end
+
+local upgradesFolder = player:WaitForChild("Upgrades")
+local leaderstats = player:WaitForChild("leaderstats")
+
+local function refreshRow(key)
+	local upgradeConfig = Config.Upgrades[key]
+	local tier = upgradesFolder[key].Value
+	local maxed = tier >= upgradeConfig.MaxTier
+
+	local row = rows[key]
+	row.name.Text = string.format("%s (Tier %d/%d)", upgradeConfig.Name, tier, upgradeConfig.MaxTier)
+	row.desc.Text = upgradeConfig.Description
+
+	if maxed then
+		row.buy.Text = "MAXED"
+		row.buy.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	else
+		local cost = Config.UpgradeCost(key, tier)
+		row.buy.Text = "$" .. cost
+		local affordable = leaderstats.Money.Value >= cost
+		row.buy.BackgroundColor3 = affordable and Color3.fromRGB(40, 140, 80) or Color3.fromRGB(120, 60, 60)
+	end
+end
+
+local function refreshAll()
+	for _, key in ipairs(UPGRADE_ORDER) do
+		refreshRow(key)
+	end
+end
+
+for _, key in ipairs(UPGRADE_ORDER) do
+	upgradesFolder[key]:GetPropertyChangedSignal("Value"):Connect(refreshAll)
+end
+leaderstats.Money:GetPropertyChangedSignal("Value"):Connect(refreshAll)
+
+refreshAll()
+
+UpgradeResultEvent.OnClientEvent:Connect(function(success, reason)
+	if success then
+		return
+	end
+	local original = toggleButton.Text
+	toggleButton.Text = reason or "Can't buy"
+	task.delay(1.2, function()
+		toggleButton.Text = original
 	end)
 end)
 ]]></ProtectedString>

@@ -5,9 +5,11 @@ local Players = game:GetService("Players")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
 
 local function onPlayerAdded(player)
 	PlayerProgress.Init(player)
+	PlayerUpgrades.Init(player)
 
 	player.CharacterAdded:Connect(function()
 		task.wait(0.5) -- let the Humanoid finish rigging before we touch it
