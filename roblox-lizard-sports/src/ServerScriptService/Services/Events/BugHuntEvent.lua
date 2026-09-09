@@ -4,14 +4,20 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 
 local DataService = require(script.Parent.Parent.DataService)
 local AbilityService = require(script.Parent.Parent.AbilityService)
 
 local ROUND_DURATION = 45
 local BUG_COUNT = 12
-local WIN_SCORE = 8
+local WIN_SCORE = 6
 local COUNTDOWN_SECONDS = 3
+local HOP_INTERVAL_MIN = 1
+local HOP_INTERVAL_MAX = 2
+local HOP_HEIGHT = 3
+local HOP_RISE_TIME = 0.3
+local HOP_FALL_TIME = 0.15
 
 local BugHuntEvent = {}
 
@@ -28,11 +34,43 @@ local function randomPointInBounds(bounds)
 	return (bounds.CFrame * CFrame.new(localPoint)).Position
 end
 
+-- Keeps the bug hopping to a new random spot every second or two, so
+-- catching it takes real aim/timing instead of walking up and firing.
+local function startHopping(bug, bounds)
+	task.spawn(function()
+		while bug.Parent do
+			task.wait(HOP_INTERVAL_MIN + math.random() * (HOP_INTERVAL_MAX - HOP_INTERVAL_MIN))
+			if not bug.Parent then
+				return
+			end
+
+			local landingPoint = randomPointInBounds(bounds)
+			local peakTween = TweenService:Create(
+				bug,
+				TweenInfo.new(HOP_RISE_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ Position = landingPoint + Vector3.new(0, HOP_HEIGHT, 0) }
+			)
+			peakTween:Play()
+			peakTween.Completed:Wait()
+			if not bug.Parent then
+				return
+			end
+
+			local landTween = TweenService:Create(
+				bug,
+				TweenInfo.new(HOP_FALL_TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ Position = landingPoint }
+			)
+			landTween:Play()
+		end
+	end)
+end
+
 local function spawnBug(owner, bounds)
 	local bug = Instance.new("Part")
 	bug.Name = "Bug"
 	bug.Shape = Enum.PartType.Ball
-	bug.Size = Vector3.new(2, 2, 2.6)
+	bug.Size = Vector3.new(1.2, 1.2, 1.6)
 	bug.Color = Color3.fromRGB(45, 32, 20)
 	bug.Material = Enum.Material.SmoothPlastic
 	bug.CanCollide = false
@@ -41,6 +79,7 @@ local function spawnBug(owner, bounds)
 	bug:SetAttribute("OwnerUserId", owner.UserId)
 	CollectionService:AddTag(bug, "Catchable")
 	bug.Parent = workspace
+	startHopping(bug, bounds)
 	return bug
 end
 
