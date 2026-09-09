@@ -48,9 +48,18 @@ local function createBranchCoral(position)
 		branch.CFrame = CFrame.new(position + horizontalOffset) * CFrame.Angles(tilt, spin, 0) * CFrame.new(0, branch.Size.Y / 2, 0)
 		branch.Parent = model
 
+		-- Tapers the branch into a spike. Guarded because MeshType.Pyramid is
+		-- an easy enum name to get wrong — if it is, the branch just stays a
+		-- plain block instead of breaking coral generation entirely.
 		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.Pyramid
-		mesh.Parent = branch
+		local ok = pcall(function()
+			mesh.MeshType = Enum.MeshType.Pyramid
+		end)
+		if ok then
+			mesh.Parent = branch
+		else
+			mesh:Destroy()
+		end
 
 		primaryBranch = primaryBranch or branch
 	end

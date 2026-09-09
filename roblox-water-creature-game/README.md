@@ -23,13 +23,12 @@ The default Roblox avatar is recolored (countershaded — darker on top,
 lighter belly, like a real fish) and given a forked tail, dorsal fin, two
 side fins, and small eyes, all built from primitive Parts — no custom mesh
 upload was available from here, so this is the closest a script alone can
-get to "looks like a fish." **The place forces every player to the R15
-avatar type** (`StarterPlayer.AvatarType`, set in `WorldSetup.server.lua`):
-without that, an account defaulting to R6 would silently fail to scale on
-evolution/level-up (R6 doesn't support the scaling API used here) and the
-fins would sit at odd proportions — R15 makes both reliable. Color, fin
-size, and (at the final tier) a soft glow all change with your evolution
-tier:
+get to "looks like a fish." It works on both R6 and R15 avatars (fins/eyes
+weld to whichever torso/head the rig has); on a rig where `Model:ScaleTo`
+doesn't apply cleanly, the recolor and fins still show, only the
+evolution/level size growth is skipped for that player (logged as a
+warning, not an error). Color, fin size, and (at the final tier) a soft
+glow all change with your evolution tier:
 
 | Evolution tier | Level range | Look |
 |---|---|---|
@@ -137,7 +136,7 @@ an `Atmosphere` instance) for a proper ocean look, no assets required.
   (spawn rates, ship types, payouts, evolution tiers, upgrade costs, Robux
   products)
 - `src/ServerScriptService/WorldSetup.server.lua` — water/Terrain + Lighting
-  + sand map barrier, once, on first run; also forces R15 avatars
+  + sand map barrier, once, on first run
 - `src/ServerScriptService/CoralGarden.server.lua` — scatters decorative
   coral across the seabed, once, on first run
 - `src/ServerScriptService/SkySpawn.server.lua` — the sky spawn platform and
@@ -235,7 +234,12 @@ All gameplay tuning lives in `GameConfig.lua`:
 
 - If a ship sinks from hits landed by more than one player, the final hit
   gets full credit for the reward (no split-credit system yet).
-- Fin/eye placement assumes a standard R15 avatar (finds `UpperTorso` and
-  `Head`); `WorldSetup.server.lua` forces R15 for exactly this reason.
+- Fin/eye placement falls back from `UpperTorso` (R15) to `Torso` (R6), and
+  uses `Head` either way, so it works on both rig types.
+- There's no scripted way to force everyone onto R15 — that's a place-level
+  setting only, in Studio's Game Settings → Avatar tab (Home → Game
+  Settings), not something a Script can set. Not needed for the game to
+  work, but if you want every player on R15 for consistent look/scaling,
+  set it there once, in Studio, on the published place.
 - The map barrier is a square sand frame matching the water block's own
   footprint (not a circle), so there are no corner gaps to sneak through.

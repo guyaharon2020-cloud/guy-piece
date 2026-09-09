@@ -5,15 +5,9 @@
 
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
-local StarterPlayer = game:GetService("StarterPlayer")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
-
--- Force R15: CreatureAppearance's body scaling and fin welds assume a
--- consistent R15 rig (UpperTorso/LowerTorso). Without this, a player whose
--- account defaults to R6 would silently get no scaling and odd-looking fins.
-StarterPlayer.AvatarType = Enum.AvatarType.R15
 
 if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local terrain = Workspace.Terrain

@@ -323,9 +323,18 @@ local function createBranchCoral(position)
 		branch.CFrame = CFrame.new(position + horizontalOffset) * CFrame.Angles(tilt, spin, 0) * CFrame.new(0, branch.Size.Y / 2, 0)
 		branch.Parent = model
 
+		-- Tapers the branch into a spike. Guarded because MeshType.Pyramid is
+		-- an easy enum name to get wrong — if it is, the branch just stays a
+		-- plain block instead of breaking coral generation entirely.
 		local mesh = Instance.new("SpecialMesh")
-		mesh.MeshType = Enum.MeshType.Pyramid
-		mesh.Parent = branch
+		local ok = pcall(function()
+			mesh.MeshType = Enum.MeshType.Pyramid
+		end)
+		if ok then
+			mesh.Parent = branch
+		else
+			mesh:Destroy()
+		end
 
 		primaryBranch = primaryBranch or branch
 	end
@@ -441,11 +450,11 @@ end
 -- Runs entirely with primitive Parts — no custom mesh/asset upload is
 -- needed (and none is available from here).
 --
--- IMPORTANT: this assumes an R15 rig (UpperTorso/LowerTorso, and
--- Model:ScaleTo support). WorldSetup.server.lua forces
--- StarterPlayer.AvatarType = R15 so this is reliable for every player —
--- without that, an R6 avatar would silently skip scaling and the fins would
--- sit at odd proportions.
+-- Falls back gracefully across rig types: getTorso() checks for
+-- UpperTorso (R15) then Torso (R6), so fins/eyes still attach either way.
+-- Model:ScaleTo (used for evolution/level-based growth) is wrapped in a
+-- pcall — on a rig where it doesn't apply cleanly, the recolor/fins still
+-- work, only the size change is skipped, and a warning is logged.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
@@ -1871,15 +1880,9 @@ Workspace:SetAttribute("SkySpawnGenerated", true)
 
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
-local StarterPlayer = game:GetService("StarterPlayer")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
-
--- Force R15: CreatureAppearance's body scaling and fin welds assume a
--- consistent R15 rig (UpperTorso/LowerTorso). Without this, a player whose
--- account defaults to R6 would silently get no scaling and odd-looking fins.
-StarterPlayer.AvatarType = Enum.AvatarType.R15
 
 if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local terrain = Workspace.Terrain

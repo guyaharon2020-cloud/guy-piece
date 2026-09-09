@@ -5,11 +5,11 @@
 -- Runs entirely with primitive Parts — no custom mesh/asset upload is
 -- needed (and none is available from here).
 --
--- IMPORTANT: this assumes an R15 rig (UpperTorso/LowerTorso, and
--- Model:ScaleTo support). WorldSetup.server.lua forces
--- StarterPlayer.AvatarType = R15 so this is reliable for every player —
--- without that, an R6 avatar would silently skip scaling and the fins would
--- sit at odd proportions.
+-- Falls back gracefully across rig types: getTorso() checks for
+-- UpperTorso (R15) then Torso (R6), so fins/eyes still attach either way.
+-- Model:ScaleTo (used for evolution/level-based growth) is wrapped in a
+-- pcall — on a rig where it doesn't apply cleanly, the recolor/fins still
+-- work, only the size change is skipped, and a warning is logged.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
