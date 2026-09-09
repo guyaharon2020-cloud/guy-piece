@@ -7,12 +7,28 @@ your fish **evolves** into a tougher-looking, faster tier — and your Level
 resets to 1 so you level up again within the new tier. Money buys permanent
 upgrades in an in-game shop, and Robux buys real-money "super powers".
 
+## Getting into the water
+
+You don't spawn directly in the ocean. Every join (and every respawn) drops
+you on an invisible platform floating high in the sky above the map —
+`Transparency = 1` with `CanCollide = true`, so you can stand on it and walk
+around while seeing straight through it to the ocean far below (a thin glow
+outlines its edges so you can still tell where it ends). A glowing blue
+portal disc a short walk away teleports you down to the water surface the
+moment you touch it.
+
 ## Your fish
 
-The default Roblox avatar is recolored and given cosmetic fins (tail,
-dorsal, two side fins) built entirely from primitive Parts — no custom mesh
+The default Roblox avatar is recolored (countershaded — darker on top,
+lighter belly, like a real fish) and given a forked tail, dorsal fin, two
+side fins, and small eyes, all built from primitive Parts — no custom mesh
 upload was available from here, so this is the closest a script alone can
-get to "looks like a fish." Color and fin size change with your evolution
+get to "looks like a fish." **The place forces every player to the R15
+avatar type** (`StarterPlayer.AvatarType`, set in `WorldSetup.server.lua`):
+without that, an account defaulting to R6 would silently fail to scale on
+evolution/level-up (R6 doesn't support the scaling API used here) and the
+fins would sit at odd proportions — R15 makes both reliable. Color, fin
+size, and (at the final tier) a soft glow all change with your evolution
 tier:
 
 | Evolution tier | Level range | Look |
@@ -45,6 +61,19 @@ a "prestige," not a punishment.
   cooldown) — visible cannon barrels stick out both sides of their hull.
   Upgrading **Bite Power** lowers how many hits a ship takes to sink;
   **Scales** cuts damage from both ramming and cannon fire.
+  - All three types now also have a flag, deck railings, and a bowsprit for
+    a more detailed silhouette, and slowly patrol in a small circle around
+    where they spawned (`ShipMovement.server.lua`) instead of sitting still
+    — `Model:PivotTo()` moves the whole ship (hull, cabin, mast, cannons,
+    humans, health bar) as one rigid group each tick, no physics needed.
+
+## The world
+
+- **Corals** — ~150 decorative coral clusters (branch coral, brain coral,
+  sea rods) scattered across the seabed, non-collidable so they never block
+  swimming (`CoralGarden.server.lua`).
+- **Map barrier** — a hollow sand wall filled right at the edge of the water
+  block (`WorldSetup.server.lua`), so you can't swim past the play area.
 
 ## The upgrade shop (Money)
 
@@ -108,11 +137,18 @@ an `Atmosphere` instance) for a proper ocean look, no assets required.
   (spawn rates, ship types, payouts, evolution tiers, upgrade costs, Robux
   products)
 - `src/ServerScriptService/WorldSetup.server.lua` — water/Terrain + Lighting
-  setup, once, on first run
+  + sand map barrier, once, on first run; also forces R15 avatars
+- `src/ServerScriptService/CoralGarden.server.lua` — scatters decorative
+  coral across the seabed, once, on first run
+- `src/ServerScriptService/SkySpawn.server.lua` — the sky spawn platform and
+  its teleport portal down to the water
 - `src/ServerScriptService/RaftSpawner.server.lua` / `RaftDestruction.server.lua`
   — spawns rafts and destroys them (+ pays out) on touch
 - `src/ServerScriptService/ShipSpawner.server.lua` — spawns ships (random
-  type, hull/cabin/mast/cannon barrels, health-bar billboard)
+  type, hull/cabin/mast/cannon barrels/flag/railings/bowsprit, health-bar
+  billboard)
+- `src/ServerScriptService/ShipMovement.server.lua` — slow circular patrol
+  drift for every ship
 - `src/ServerScriptService/ShipCombat.server.lua` — ramming combat, Depth
   Charge consumption, sinking + payout
 - `src/ServerScriptService/ShipCannons.server.lua` — short-range cannon fire
@@ -186,14 +222,20 @@ All gameplay tuning lives in `GameConfig.lua`:
 | `MoneyPerHuman`, `XPPerHuman` | base payout per human destroyed |
 | `ShipTypes` | add/edit ship types — size, color, human count, cannon stats |
 | `ShipContactDamage`, `ShipTouchCooldown` | ram danger and hit pacing |
+| `ShipDriftRadiusMin/Max`, `ShipDriftDegreesPerSecondMin/Max` | how far/fast ships patrol |
 | `LevelsPerEvolution`, `EvolutionTiers` | when/how the fish evolves |
 | `Config.XPForLevel(level)` | the XP curve between levels |
 | `Config.Upgrades` (6 entries) | shop tier count, cost curve, per-tier effect |
 | `Config.RobuxProducts` | the Robux shop catalog and each power's effect |
+| `CoralCount` | how many decorative coral clusters to scatter |
+| `BarrierThickness`, `BarrierHeight` | the sand wall around the play area |
+| `SkySpawnHeight`, `SkySpawnPlatformSize`, `SkySpawnPortalOffset` | the sky spawn platform + portal |
 
 ## Notes
 
 - If a ship sinks from hits landed by more than one player, the final hit
   gets full credit for the reward (no split-credit system yet).
-- Fin placement assumes a standard R15/R6 avatar (finds `UpperTorso` or
-  `Torso`); a heavily customized starting avatar may look slightly off.
+- Fin/eye placement assumes a standard R15 avatar (finds `UpperTorso` and
+  `Head`); `WorldSetup.server.lua` forces R15 for exactly this reason.
+- The map barrier is a square sand frame matching the water block's own
+  footprint (not a circle), so there are no corner gaps to sneak through.

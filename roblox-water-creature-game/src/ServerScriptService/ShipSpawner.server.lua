@@ -101,6 +101,46 @@ local function addCannonBarrels(ship, hull)
 	end
 end
 
+-- Flag, railings, and a bowsprit for a more detailed, ship-like silhouette.
+-- The hull's local X axis is its length (bow/stern), Z is its beam
+-- (port/starboard) — matches the cannon barrel and human-scatter offsets
+-- above.
+local function addShipDetails(ship, hull, shipType)
+	local mastTop = hull.CFrame * CFrame.new(2, 18, 0)
+
+	local flag = Instance.new("WedgePart")
+	flag.Name = "Flag"
+	flag.Size = Vector3.new(0.2, 2.5, 4)
+	flag.Color = shipType.HullColor
+	flag.Material = Enum.Material.Fabric
+	flag.Anchored = true
+	flag.CanCollide = false
+	flag.CFrame = mastTop * CFrame.new(0, -1, 2) * CFrame.Angles(0, math.rad(90), 0)
+	flag.Parent = ship
+
+	for _, side in ipairs({ -1, 1 }) do
+		local rail = Instance.new("Part")
+		rail.Name = "Railing"
+		rail.Size = Vector3.new(hull.Size.X * 0.92, 1.4, 0.4)
+		rail.Color = Color3.fromRGB(60, 45, 30)
+		rail.Material = Enum.Material.Wood
+		rail.Anchored = true
+		rail.CanCollide = false
+		rail.CFrame = hull.CFrame * CFrame.new(0, hull.Size.Y / 2 + 0.7, side * (hull.Size.Z / 2 - 0.3))
+		rail.Parent = ship
+	end
+
+	local bowsprit = Instance.new("Part")
+	bowsprit.Name = "Bowsprit"
+	bowsprit.Size = Vector3.new(8, 0.6, 0.6)
+	bowsprit.Color = Color3.fromRGB(70, 50, 35)
+	bowsprit.Material = Enum.Material.Wood
+	bowsprit.Anchored = true
+	bowsprit.CanCollide = false
+	bowsprit.CFrame = hull.CFrame * CFrame.new(hull.Size.X / 2 + 3, hull.Size.Y / 2, 0) * CFrame.Angles(0, 0, math.rad(10))
+	bowsprit.Parent = ship
+end
+
 local function spawnShip()
 	if #shipsFolder:GetChildren() >= Config.MaxShips then
 		return
@@ -147,6 +187,8 @@ local function spawnShip()
 	mast.CanCollide = false
 	mast.Color = Color3.fromRGB(70, 50, 35)
 	mast.Parent = ship
+
+	addShipDetails(ship, hull, shipType)
 
 	if shipType.HasCannon then
 		addCannonBarrels(ship, hull)

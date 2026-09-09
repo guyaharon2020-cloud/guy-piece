@@ -6,6 +6,27 @@ local Config = {}
 -- World / water
 Config.WaterCenter = Vector3.new(0, -10, 0)
 Config.WaterSize = Vector3.new(1000, 60, 1000)
+Config.SeabedY = Config.WaterCenter.Y - Config.WaterSize.Y / 2 -- top of the sand floor
+
+-- Map barrier: a hollow sand "frame" filled right at the edge of the water
+-- block so players can't swim past the play area.
+Config.BarrierThickness = 40
+Config.BarrierHeight = 150
+
+-- Corals scattered across the seabed, purely decorative.
+Config.CoralCount = 150
+
+-- The sky spawn platform + portal every player (re)spawns on.
+Config.SkySpawnHeight = 250 -- studs above the water surface
+Config.SkySpawnPlatformSize = Vector3.new(40, 2, 40)
+Config.SkySpawnPortalOffset = 16 -- studs from the platform center
+
+-- Ship patrol movement: slow drift in a small circle around each ship's
+-- spawn point.
+Config.ShipDriftRadiusMin = 15
+Config.ShipDriftRadiusMax = 35
+Config.ShipDriftDegreesPerSecondMin = 3
+Config.ShipDriftDegreesPerSecondMax = 8
 
 -- Raft spawning
 Config.RaftSpawnInterval = 8 -- seconds between spawn attempts

@@ -1,12 +1,19 @@
--- Fills the workspace Terrain with a big water volume (plus a sandy floor)
--- and tunes Lighting/water visuals for a nicer ocean look, the first time
--- the server starts. Safe to re-run: it skips itself once already generated.
+-- Fills the workspace Terrain with a big water volume (plus a sandy floor
+-- and a sand barrier ring around the edge) and tunes Lighting/water visuals
+-- for a nicer ocean look, the first time the server starts. Safe to re-run:
+-- the Terrain/Lighting part skips itself once already generated.
 
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+local StarterPlayer = game:GetService("StarterPlayer")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+-- Force R15: CreatureAppearance's body scaling and fin welds assume a
+-- consistent R15 rig (UpperTorso/LowerTorso). Without this, a player whose
+-- account defaults to R6 would silently get no scaling and odd-looking fins.
+StarterPlayer.AvatarType = Enum.AvatarType.R15
 
 if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local terrain = Workspace.Terrain
@@ -16,6 +23,20 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local seabedCenter = Config.WaterCenter - Vector3.new(0, Config.WaterSize.Y / 2 + 5, 0)
 	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
 	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
+
+	-- A hollow sand "frame" right at the edge of the water block: fill a
+	-- block the size of the play area, then carve out everything inside it
+	-- with Air, leaving a solid ring players can't swim past. Matching the
+	-- water block's own square footprint means there are no corner gaps.
+	local barrierCFrame = CFrame.new(Config.WaterCenter.X, Config.WaterCenter.Y, Config.WaterCenter.Z)
+	local outerSize = Vector3.new(Config.WaterSize.X, Config.BarrierHeight, Config.WaterSize.Z)
+	local innerSize = Vector3.new(
+		Config.WaterSize.X - Config.BarrierThickness * 2,
+		Config.BarrierHeight,
+		Config.WaterSize.Z - Config.BarrierThickness * 2
+	)
+	terrain:FillBlock(barrierCFrame, outerSize, Enum.Material.Sand)
+	terrain:FillBlock(barrierCFrame, innerSize, Enum.Material.Air)
 
 	-- Nicer water look than the flat default.
 	terrain.WaterColor = Color3.fromRGB(15, 80, 120)

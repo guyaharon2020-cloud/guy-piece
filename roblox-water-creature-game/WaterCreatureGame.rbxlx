@@ -25,6 +25,27 @@ local Config = {}
 -- World / water
 Config.WaterCenter = Vector3.new(0, -10, 0)
 Config.WaterSize = Vector3.new(1000, 60, 1000)
+Config.SeabedY = Config.WaterCenter.Y - Config.WaterSize.Y / 2 -- top of the sand floor
+
+-- Map barrier: a hollow sand "frame" filled right at the edge of the water
+-- block so players can't swim past the play area.
+Config.BarrierThickness = 40
+Config.BarrierHeight = 150
+
+-- Corals scattered across the seabed, purely decorative.
+Config.CoralCount = 150
+
+-- The sky spawn platform + portal every player (re)spawns on.
+Config.SkySpawnHeight = 250 -- studs above the water surface
+Config.SkySpawnPlatformSize = Vector3.new(40, 2, 40)
+Config.SkySpawnPortalOffset = 16 -- studs from the platform center
+
+-- Ship patrol movement: slow drift in a small circle around each ship's
+-- spawn point.
+Config.ShipDriftRadiusMin = 15
+Config.ShipDriftRadiusMax = 35
+Config.ShipDriftDegreesPerSecondMin = 3
+Config.ShipDriftDegreesPerSecondMax = 8
 
 -- Raft spawning
 Config.RaftSpawnInterval = 8 -- seconds between spawn attempts
@@ -251,6 +272,128 @@ return Config
 		</Properties>
 		<Item class="Script" referent="RBX6">
 			<Properties>
+				<string name="Name">CoralGarden</string>
+				<ProtectedString name="Source"><![CDATA[-- Scatters decorative coral clusters across the seabed, once, on first
+-- server start. Purely visual: every part is non-collidable so it never
+-- blocks swimming. Built entirely from primitive Parts/SpecialMesh — no
+-- asset upload needed.
+
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+if Workspace:GetAttribute("CoralsGenerated") then
+	return
+end
+
+local CORAL_COLORS = {
+	Color3.fromRGB(255, 111, 145),
+	Color3.fromRGB(255, 159, 67),
+	Color3.fromRGB(162, 95, 220),
+	Color3.fromRGB(255, 206, 84),
+	Color3.fromRGB(72, 219, 199),
+}
+
+local function randomCoralColor()
+	return CORAL_COLORS[math.random(1, #CORAL_COLORS)]
+end
+
+local function createBranchCoral(position)
+	local model = Instance.new("Model")
+	model.Name = "Coral"
+
+	local color = randomCoralColor()
+	local branchCount = math.random(3, 5)
+	local primaryBranch
+
+	for _ = 1, branchCount do
+		local branch = Instance.new("Part")
+		branch.Name = "Branch"
+		branch.Size = Vector3.new(0.8, math.random(30, 55) / 10, 0.8)
+		branch.Color = color
+		branch.Material = Enum.Material.Slate
+		branch.Anchored = true
+		branch.CanCollide = false
+		branch.CanQuery = false
+
+		local tilt = math.rad(math.random(-25, 25))
+		local spin = math.rad(math.random(0, 360))
+		local horizontalOffset = Vector3.new(math.random(-15, 15) / 10, 0, math.random(-15, 15) / 10)
+		branch.CFrame = CFrame.new(position + horizontalOffset) * CFrame.Angles(tilt, spin, 0) * CFrame.new(0, branch.Size.Y / 2, 0)
+		branch.Parent = model
+
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Pyramid
+		mesh.Parent = branch
+
+		primaryBranch = primaryBranch or branch
+	end
+
+	model.PrimaryPart = primaryBranch
+	return model
+end
+
+local function createBrainCoral(position)
+	local part = Instance.new("Part")
+	part.Name = "BrainCoral"
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.new(math.random(20, 40) / 10, math.random(14, 22) / 10, math.random(20, 40) / 10)
+	part.Color = randomCoralColor()
+	part.Material = Enum.Material.Slate
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CFrame = CFrame.new(position + Vector3.new(0, part.Size.Y / 2, 0))
+	return part
+end
+
+local function createSeaRod(position)
+	local part = Instance.new("Part")
+	part.Name = "SeaRod"
+	part.Shape = Enum.PartType.Cylinder
+	part.Size = Vector3.new(math.random(25, 45) / 10, 0.35, 0.35)
+	part.Color = randomCoralColor()
+	part.Material = Enum.Material.Neon
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CFrame = CFrame.new(position + Vector3.new(0, part.Size.X / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	return part
+end
+
+local coralsFolder = Instance.new("Folder")
+coralsFolder.Name = "Corals"
+
+for _ = 1, Config.CoralCount do
+	local angle = math.random() * math.pi * 2
+	local distance = math.random(0, Config.SpawnRadius)
+	local position = Vector3.new(
+		Config.WaterCenter.X + math.cos(angle) * distance,
+		Config.SeabedY,
+		Config.WaterCenter.Z + math.sin(angle) * distance
+	)
+
+	local roll = math.random()
+	local piece
+	if roll < 0.55 then
+		piece = createBranchCoral(position)
+	elseif roll < 0.8 then
+		piece = createBrainCoral(position)
+	else
+		piece = createSeaRod(position)
+	end
+
+	piece.Parent = coralsFolder
+end
+
+coralsFolder.Parent = Workspace
+Workspace:SetAttribute("CoralsGenerated", true)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX7">
+			<Properties>
 				<string name="Name">GameManager</string>
 				<ProtectedString name="Source"><![CDATA[-- Bootstraps player progress, upgrades, and the Robux consumables folder on
 -- join, and re-applies level stats + fish appearance whenever a player's
@@ -284,21 +427,25 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Folder" referent="RBX7">
+		<Item class="Folder" referent="RBX8">
 			<Properties>
 				<string name="Name">Modules</string>
 			</Properties>
-			<Item class="ModuleScript" referent="RBX8">
+			<Item class="ModuleScript" referent="RBX9">
 				<Properties>
 					<string name="Name">CreatureAppearance</string>
 					<ProtectedString name="Source"><![CDATA[-- Makes the player's default Roblox character look like a fish: strips
--- normal clothing/accessories, recolors the body per evolution tier, and
--- welds on a few cosmetic fin parts. Runs entirely with primitive Parts —
--- no custom mesh/asset upload is needed (and none is available from here).
+-- normal clothing/accessories, recolors the body (countershaded — darker on
+-- top, lighter belly, like most fish) per evolution tier, adds simple
+-- side-mounted eyes, and welds on a forked tail + dorsal + pectoral fins.
+-- Runs entirely with primitive Parts — no custom mesh/asset upload is
+-- needed (and none is available from here).
 --
--- Kept deliberately simple: fins are rigidly welded to the torso, so they
--- won't deform with walk/swim animations, but they read fine at a glance
--- and need zero external assets.
+-- IMPORTANT: this assumes an R15 rig (UpperTorso/LowerTorso, and
+-- Model:ScaleTo support). WorldSetup.server.lua forces
+-- StarterPlayer.AvatarType = R15 so this is reliable for every player —
+-- without that, an R6 avatar would silently skip scaling and the fins would
+-- sit at odd proportions.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
@@ -309,24 +456,66 @@ local function getTorso(character)
 	return character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
 end
 
-local function attachFin(character, torso, name, size, color, offset)
+local function getHead(character)
+	return character:FindFirstChild("Head")
+end
+
+local function lighten(color, amount)
+	return Color3.new(
+		math.clamp(color.R + amount, 0, 1),
+		math.clamp(color.G + amount, 0, 1),
+		math.clamp(color.B + amount, 0, 1)
+	)
+end
+
+local function attachPart(character, anchor, part, offset)
+	part.CFrame = anchor.CFrame * offset
+	part.Parent = character
+
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = anchor
+	weld.Part1 = part
+	weld.Parent = part
+
+	return part
+end
+
+local function attachFin(character, torso, name, size, color, offset, material)
 	local fin = Instance.new("WedgePart")
 	fin.Name = name
 	fin.Size = size
 	fin.Color = color
-	fin.Material = Enum.Material.SmoothPlastic
+	fin.Material = material
 	fin.CanCollide = false
 	fin.CanQuery = false
 	fin.Massless = true
-	fin.CFrame = torso.CFrame * offset
-	fin.Parent = character
+	return attachPart(character, torso, fin, offset)
+end
 
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = torso
-	weld.Part1 = fin
-	weld.Parent = fin
+local function attachEye(character, head, side)
+	local eyeWhite = Instance.new("Part")
+	eyeWhite.Name = "Eye"
+	eyeWhite.Shape = Enum.PartType.Ball
+	eyeWhite.Size = Vector3.new(0.5, 0.5, 0.5)
+	eyeWhite.Color = Color3.fromRGB(255, 255, 255)
+	eyeWhite.Material = Enum.Material.SmoothPlastic
+	eyeWhite.CanCollide = false
+	eyeWhite.CanQuery = false
+	eyeWhite.Massless = true
+	attachPart(character, head, eyeWhite, CFrame.new(side * 0.55, 0, -0.35))
 
-	return fin
+	local pupil = Instance.new("Part")
+	pupil.Name = "Pupil"
+	pupil.Shape = Enum.PartType.Ball
+	pupil.Size = Vector3.new(0.22, 0.22, 0.22)
+	pupil.Color = Color3.fromRGB(20, 20, 20)
+	pupil.Material = Enum.Material.SmoothPlastic
+	pupil.CanCollide = false
+	pupil.CanQuery = false
+	pupil.Massless = true
+	attachPart(character, head, pupil, CFrame.new(side * 0.55, 0, -0.55))
+
+	return eyeWhite, pupil
 end
 
 function CreatureAppearance.Apply(player)
@@ -336,8 +525,9 @@ function CreatureAppearance.Apply(player)
 	end
 
 	local torso = getTorso(character)
+	local head = getHead(character)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not torso or not humanoid then
+	if not torso or not head or not humanoid then
 		return
 	end
 
@@ -349,45 +539,91 @@ function CreatureAppearance.Apply(player)
 
 	local leaderstats = player:FindFirstChild("leaderstats")
 	local tierIndex = (leaderstats and leaderstats.Evolution.Value or 0) + 1
+	local isMaxTier = tierIndex >= #Config.EvolutionTiers
 	local tier = Config.EvolutionTiers[math.clamp(tierIndex, 1, #Config.EvolutionTiers)]
 
 	local consumables = player:FindFirstChild("Consumables")
 	local goldenScales = consumables and consumables:FindFirstChild("GoldenScales")
-	local bodyColor = (goldenScales and goldenScales.Value) and Color3.fromRGB(230, 190, 60) or tier.Color
+	local isGolden = goldenScales and goldenScales.Value
+
+	local topColor = isGolden and Color3.fromRGB(230, 190, 60) or tier.Color
+	local bellyColor = isGolden and Color3.fromRGB(255, 224, 130) or lighten(tier.Color, 0.3)
 
 	local bodyColors = character:FindFirstChildOfClass("BodyColors") or Instance.new("BodyColors")
-	bodyColors.HeadColor3 = bodyColor
-	bodyColors.TorsoColor3 = bodyColor
-	bodyColors.LeftArmColor3 = bodyColor
-	bodyColors.RightArmColor3 = bodyColor
-	bodyColors.LeftLegColor3 = bodyColor
-	bodyColors.RightLegColor3 = bodyColor
+	bodyColors.HeadColor3 = topColor
+	bodyColors.TorsoColor3 = topColor
+	bodyColors.LeftArmColor3 = topColor
+	bodyColors.RightArmColor3 = topColor
+	bodyColors.LeftLegColor3 = bellyColor
+	bodyColors.RightLegColor3 = bellyColor
 	bodyColors.Parent = character
 
-	local existingFins = character:FindFirstChild("CreatureFins")
-	if existingFins then
-		existingFins:Destroy()
+	local existingCosmetics = character:FindFirstChild("CreatureCosmetics")
+	if existingCosmetics then
+		existingCosmetics:Destroy()
 	end
 
-	local finsFolder = Instance.new("Folder")
-	finsFolder.Name = "CreatureFins"
+	local cosmeticsFolder = Instance.new("Folder")
+	cosmeticsFolder.Name = "CreatureCosmetics"
 
-	local finColor = tier.FinColor
+	local finColor = isGolden and Color3.fromRGB(255, 235, 150) or tier.FinColor
+	local finMaterial = isMaxTier and Enum.Material.Neon or Enum.Material.SmoothPlastic
 	local s = tier.FinScale
 
-	attachFin(character, torso, "TailFin", Vector3.new(0.4, 2.2 * s, 3 * s), finColor, CFrame.new(0, -0.5, 1.4) * CFrame.Angles(0, math.rad(180), 0)).Parent = finsFolder
-	attachFin(character, torso, "DorsalFin", Vector3.new(0.4, 1.6 * s, 1.6 * s), finColor, CFrame.new(0, 1.2, 0) * CFrame.Angles(0, 0, math.rad(90))).Parent = finsFolder
-	attachFin(character, torso, "LeftFin", Vector3.new(1.4 * s, 0.3, 1 * s), finColor, CFrame.new(-1.1, 0, 0) * CFrame.Angles(0, 0, math.rad(20))).Parent = finsFolder
-	attachFin(character, torso, "RightFin", Vector3.new(1.4 * s, 0.3, 1 * s), finColor, CFrame.new(1.1, 0, 0) * CFrame.Angles(0, 0, math.rad(-20))).Parent = finsFolder
+	-- Forked tail: two wedges angled outward from the spine for a proper
+	-- fish-tail silhouette instead of a single flat fin.
+	attachFin(character, torso, "TailFinUp", Vector3.new(0.4, 2 * s, 2.6 * s), finColor,
+		CFrame.new(0, 0.3, 1.3) * CFrame.Angles(0, math.rad(180), math.rad(24)), finMaterial).Parent = cosmeticsFolder
+	attachFin(character, torso, "TailFinDown", Vector3.new(0.4, 2 * s, 2.6 * s), finColor,
+		CFrame.new(0, -0.9, 1.3) * CFrame.Angles(0, math.rad(180), math.rad(-24)), finMaterial).Parent = cosmeticsFolder
 
-	finsFolder.Parent = character
+	attachFin(character, torso, "DorsalFin", Vector3.new(0.4, 1.6 * s, 1.6 * s), finColor,
+		CFrame.new(0, 1.2, 0) * CFrame.Angles(0, 0, math.rad(90)), finMaterial).Parent = cosmeticsFolder
+
+	attachFin(character, torso, "LeftFin", Vector3.new(1.4 * s, 0.3, 1 * s), finColor,
+		CFrame.new(-1.1, 0, 0) * CFrame.Angles(0, 0, math.rad(20)), finMaterial).Parent = cosmeticsFolder
+	attachFin(character, torso, "RightFin", Vector3.new(1.4 * s, 0.3, 1 * s), finColor,
+		CFrame.new(1.1, 0, 0) * CFrame.Angles(0, 0, math.rad(-20)), finMaterial).Parent = cosmeticsFolder
+
+	local leftEye, leftPupil = attachEye(character, head, -1)
+	leftEye.Parent = cosmeticsFolder
+	leftPupil.Parent = cosmeticsFolder
+	local rightEye, rightPupil = attachEye(character, head, 1)
+	rightEye.Parent = cosmeticsFolder
+	rightPupil.Parent = cosmeticsFolder
+
+	if isMaxTier or isGolden then
+		-- Parented to the torso itself (not cosmeticsFolder) so it isn't
+		-- wiped by the "existingCosmetics:Destroy()" cleanup on next Apply.
+		local existingGlow = torso:FindFirstChild("CreatureGlow")
+		if existingGlow then
+			existingGlow:Destroy()
+		end
+
+		local glow = Instance.new("PointLight")
+		glow.Name = "CreatureGlow"
+		glow.Color = isGolden and Color3.fromRGB(255, 220, 130) or Color3.fromRGB(120, 255, 220)
+		glow.Range = 12
+		glow.Brightness = 1.5
+		glow.Parent = torso
+	end
+
+	cosmeticsFolder.Parent = character
+
+	local scale = 1 + ((leaderstats and leaderstats.Level.Value or 1) - 1) * Config.SizePerLevel + tier.SizeBonus
+	local ok, err = pcall(function()
+		character:ScaleTo(scale)
+	end)
+	if not ok then
+		warn("CreatureAppearance: ScaleTo failed for " .. player.Name .. " — " .. tostring(err))
+	end
 end
 
 return CreatureAppearance
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX9">
+			<Item class="ModuleScript" referent="RBX10">
 				<Properties>
 					<string name="Name">PlayerProgress</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP, Evolution), the
@@ -550,7 +786,7 @@ return PlayerProgress
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX10">
+			<Item class="ModuleScript" referent="RBX11">
 				<Properties>
 					<string name="Name">PlayerUpgrades</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's shop upgrade tiers (a non-leaderstat "Upgrades" folder,
@@ -659,7 +895,7 @@ return PlayerUpgrades
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX11">
+			<Item class="ModuleScript" referent="RBX12">
 				<Properties>
 					<string name="Name">RobuxShop</string>
 					<ProtectedString name="Source"><![CDATA[-- The "Robux Shop": real-money super powers bought via MarketplaceService
@@ -809,7 +1045,7 @@ return RobuxShop
 				</Properties>
 			</Item>
 		</Item>
-		<Item class="Script" referent="RBX12">
+		<Item class="Script" referent="RBX13">
 			<Properties>
 				<string name="Name">RaftDestruction</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
@@ -866,7 +1102,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX13">
+		<Item class="Script" referent="RBX14">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -957,7 +1193,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX14">
+		<Item class="Script" referent="RBX15">
 			<Properties>
 				<string name="Name">ShipCannons</string>
 				<ProtectedString name="Source"><![CDATA[-- Ships tagged "Cannon" (Frigates and Galleons — see ShipSpawner) periodically
@@ -1075,7 +1311,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX15">
+		<Item class="Script" referent="RBX16">
 			<Properties>
 				<string name="Name">ShipCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
@@ -1157,7 +1393,54 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX16">
+		<Item class="Script" referent="RBX17">
+			<Properties>
+				<string name="Name">ShipMovement</string>
+				<ProtectedString name="Source"><![CDATA[-- Makes each ship slowly drift in a small circle around its spawn point,
+-- always facing its direction of travel. All ship parts are Anchored, so
+-- Model:PivotTo() moves the whole ship (hull, cabin, mast, cannons, humans,
+-- health bar) as one rigid group with no physics/welds needed.
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local function driftShip(hull)
+	local ship = hull.Parent
+	if not ship or not ship.PrimaryPart then
+		return
+	end
+
+	local origin = ship:GetPivot().Position
+	local radius = math.random(Config.ShipDriftRadiusMin, Config.ShipDriftRadiusMax)
+	local angularSpeed = math.rad(math.random(Config.ShipDriftDegreesPerSecondMin, Config.ShipDriftDegreesPerSecondMax))
+	local phase = math.random() * math.pi * 2
+
+	local elapsed = 0
+	while ship.Parent do
+		local dt = task.wait(0.1)
+		elapsed += dt
+
+		local angle = phase + elapsed * angularSpeed
+		local offset = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+		local facing = angle + math.pi / 2 -- tangent to the circle: face the direction of travel
+
+		ship:PivotTo(CFrame.new(origin + offset) * CFrame.Angles(0, facing, 0))
+	end
+end
+
+CollectionService:GetInstanceAddedSignal("Ship"):Connect(function(hull)
+	task.spawn(driftShip, hull)
+end)
+
+for _, hull in ipairs(CollectionService:GetTagged("Ship")) do
+	task.spawn(driftShip, hull)
+end
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX18">
 			<Properties>
 				<string name="Name">ShipSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
@@ -1263,6 +1546,46 @@ local function addCannonBarrels(ship, hull)
 	end
 end
 
+-- Flag, railings, and a bowsprit for a more detailed, ship-like silhouette.
+-- The hull's local X axis is its length (bow/stern), Z is its beam
+-- (port/starboard) — matches the cannon barrel and human-scatter offsets
+-- above.
+local function addShipDetails(ship, hull, shipType)
+	local mastTop = hull.CFrame * CFrame.new(2, 18, 0)
+
+	local flag = Instance.new("WedgePart")
+	flag.Name = "Flag"
+	flag.Size = Vector3.new(0.2, 2.5, 4)
+	flag.Color = shipType.HullColor
+	flag.Material = Enum.Material.Fabric
+	flag.Anchored = true
+	flag.CanCollide = false
+	flag.CFrame = mastTop * CFrame.new(0, -1, 2) * CFrame.Angles(0, math.rad(90), 0)
+	flag.Parent = ship
+
+	for _, side in ipairs({ -1, 1 }) do
+		local rail = Instance.new("Part")
+		rail.Name = "Railing"
+		rail.Size = Vector3.new(hull.Size.X * 0.92, 1.4, 0.4)
+		rail.Color = Color3.fromRGB(60, 45, 30)
+		rail.Material = Enum.Material.Wood
+		rail.Anchored = true
+		rail.CanCollide = false
+		rail.CFrame = hull.CFrame * CFrame.new(0, hull.Size.Y / 2 + 0.7, side * (hull.Size.Z / 2 - 0.3))
+		rail.Parent = ship
+	end
+
+	local bowsprit = Instance.new("Part")
+	bowsprit.Name = "Bowsprit"
+	bowsprit.Size = Vector3.new(8, 0.6, 0.6)
+	bowsprit.Color = Color3.fromRGB(70, 50, 35)
+	bowsprit.Material = Enum.Material.Wood
+	bowsprit.Anchored = true
+	bowsprit.CanCollide = false
+	bowsprit.CFrame = hull.CFrame * CFrame.new(hull.Size.X / 2 + 3, hull.Size.Y / 2, 0) * CFrame.Angles(0, 0, math.rad(10))
+	bowsprit.Parent = ship
+end
+
 local function spawnShip()
 	if #shipsFolder:GetChildren() >= Config.MaxShips then
 		return
@@ -1310,6 +1633,8 @@ local function spawnShip()
 	mast.Color = Color3.fromRGB(70, 50, 35)
 	mast.Parent = ship
 
+	addShipDetails(ship, hull, shipType)
+
 	if shipType.HasCannon then
 		addCannonBarrels(ship, hull)
 	end
@@ -1355,7 +1680,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX17">
+		<Item class="Script" referent="RBX19">
 			<Properties>
 				<string name="Name">ShopHandler</string>
 				<ProtectedString name="Source"><![CDATA[-- Server side of both shops:
@@ -1428,18 +1753,133 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX18">
+		<Item class="Script" referent="RBX20">
 			<Properties>
-				<string name="Name">WorldSetup</string>
-				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor)
--- and tunes Lighting/water visuals for a nicer ocean look, the first time
--- the server starts. Safe to re-run: it skips itself once already generated.
+				<string name="Name">SkySpawn</string>
+				<ProtectedString name="Source"><![CDATA[-- Every player (re)spawns on an invisible, walkable platform high above the
+-- water — Transparency 1 + CanCollide true means you can stand on it and
+-- still see straight through it to the ocean below. A glowing portal on the
+-- platform teleports whoever touches it down to the water surface. Since
+-- this is the only SpawnLocation in the place, every respawn starts here
+-- too, so dying sends you back through the portal flow.
 
 local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+if Workspace:GetAttribute("SkySpawnGenerated") then
+	return
+end
+
+local skyY = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + Config.SkySpawnHeight
+
+local platform = Instance.new("SpawnLocation")
+platform.Name = "SkySpawn"
+platform.Size = Config.SkySpawnPlatformSize
+platform.CFrame = CFrame.new(Config.WaterCenter.X, skyY, Config.WaterCenter.Z)
+platform.Anchored = true
+platform.CanCollide = true
+platform.Transparency = 1
+platform.Neutral = true
+platform.Parent = Workspace
+
+-- A thin glowing rim around the invisible platform's edges, so players can
+-- see where the edge is even though the floor itself is see-through.
+local half = platform.Size.X / 2
+local barThickness, barHeight = 0.6, 0.4
+local edgeOffsets = {
+	{ Vector3.new(0, 0, half), Vector3.new(platform.Size.X, barHeight, barThickness) },
+	{ Vector3.new(0, 0, -half), Vector3.new(platform.Size.X, barHeight, barThickness) },
+	{ Vector3.new(half, 0, 0), Vector3.new(barThickness, barHeight, platform.Size.Z) },
+	{ Vector3.new(-half, 0, 0), Vector3.new(barThickness, barHeight, platform.Size.Z) },
+}
+for _, edge in ipairs(edgeOffsets) do
+	local offset, size = edge[1], edge[2]
+	local bar = Instance.new("Part")
+	bar.Name = "EdgeGlow"
+	bar.Size = size
+	bar.CFrame = platform.CFrame * CFrame.new(offset.X, platform.Size.Y / 2 + barHeight / 2, offset.Z)
+	bar.Anchored = true
+	bar.CanCollide = false
+	bar.Material = Enum.Material.Neon
+	bar.Color = Color3.fromRGB(150, 220, 255)
+	bar.Parent = Workspace
+end
+
+-- The portal: a glowing vertical disc a short walk from the platform
+-- center. A Cylinder part's flat round face already stands vertical with
+-- no extra rotation needed (its thin axis is local X).
+local portal = Instance.new("Part")
+portal.Name = "Portal"
+portal.Shape = Enum.PartType.Cylinder
+portal.Size = Vector3.new(1, 14, 14)
+portal.Anchored = true
+portal.CanCollide = false
+portal.Material = Enum.Material.Neon
+portal.Color = Color3.fromRGB(80, 180, 255)
+portal.Transparency = 0.25
+portal.CFrame = CFrame.new(Config.WaterCenter.X, skyY + 7, Config.WaterCenter.Z + Config.SkySpawnPortalOffset)
+portal.Parent = Workspace
+
+local light = Instance.new("PointLight")
+light.Color = Color3.fromRGB(120, 200, 255)
+light.Range = 24
+light.Brightness = 2
+light.Parent = portal
+
+local dropPoint = Vector3.new(
+	Config.WaterCenter.X,
+	Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 6,
+	Config.WaterCenter.Z
+)
+
+local lastTeleportAt = {}
+
+portal.Touched:Connect(function(otherPart)
+	local character = otherPart.Parent
+	local player = character and Players:GetPlayerFromCharacter(character)
+	if not player then
+		return
+	end
+
+	local now = os.clock()
+	if lastTeleportAt[player] and now - lastTeleportAt[player] < 2 then
+		return
+	end
+	lastTeleportAt[player] = now
+
+	character:PivotTo(CFrame.new(dropPoint))
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	lastTeleportAt[player] = nil
+end)
+
+Workspace:SetAttribute("SkySpawnGenerated", true)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX21">
+			<Properties>
+				<string name="Name">WorldSetup</string>
+				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor
+-- and a sand barrier ring around the edge) and tunes Lighting/water visuals
+-- for a nicer ocean look, the first time the server starts. Safe to re-run:
+-- the Terrain/Lighting part skips itself once already generated.
+
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local StarterPlayer = game:GetService("StarterPlayer")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+-- Force R15: CreatureAppearance's body scaling and fin welds assume a
+-- consistent R15 rig (UpperTorso/LowerTorso). Without this, a player whose
+-- account defaults to R6 would silently get no scaling and odd-looking fins.
+StarterPlayer.AvatarType = Enum.AvatarType.R15
 
 if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local terrain = Workspace.Terrain
@@ -1449,6 +1889,20 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 	local seabedCenter = Config.WaterCenter - Vector3.new(0, Config.WaterSize.Y / 2 + 5, 0)
 	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
 	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
+
+	-- A hollow sand "frame" right at the edge of the water block: fill a
+	-- block the size of the play area, then carve out everything inside it
+	-- with Air, leaving a solid ring players can't swim past. Matching the
+	-- water block's own square footprint means there are no corner gaps.
+	local barrierCFrame = CFrame.new(Config.WaterCenter.X, Config.WaterCenter.Y, Config.WaterCenter.Z)
+	local outerSize = Vector3.new(Config.WaterSize.X, Config.BarrierHeight, Config.WaterSize.Z)
+	local innerSize = Vector3.new(
+		Config.WaterSize.X - Config.BarrierThickness * 2,
+		Config.BarrierHeight,
+		Config.WaterSize.Z - Config.BarrierThickness * 2
+	)
+	terrain:FillBlock(barrierCFrame, outerSize, Enum.Material.Sand)
+	terrain:FillBlock(barrierCFrame, innerSize, Enum.Material.Air)
 
 	-- Nicer water look than the flat default.
 	terrain.WaterColor = Color3.fromRGB(15, 80, 120)
@@ -1483,15 +1937,15 @@ Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX19">
+	<Item class="StarterPlayer" referent="RBX22">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX20">
+		<Item class="StarterPlayerScripts" referent="RBX23">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX21">
+			<Item class="LocalScript" referent="RBX24">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
@@ -1571,7 +2025,7 @@ refreshDepthChargeLabel()
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX22">
+			<Item class="LocalScript" referent="RBX25">
 				<Properties>
 					<string name="Name">UpgradeShop</string>
 					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with two tabs:
