@@ -130,6 +130,21 @@ perk — or a receipt retried after a crash — is never lost or double-granted.
 reflectance, wave size/speed) and Lighting (time of day, ambient, fog,
 an `Atmosphere` instance) for a proper ocean look, no assets required.
 
+`GraphicsPolish.server.lua` layers on more, entirely separately (see below
+for why): post-processing (bloom, color grading, subtle sun rays), 6 small
+rock/sand/grass islands ringing the outer play area for visual variety, and
+ambient rising bubbles underwater (using the engine's own built-in particle
+texture, not an uploaded one).
+
+**A hard ceiling worth being upfront about:** true "Blox Fruits" fidelity —
+custom-sculpted islands, custom character/fruit/weapon 3D models, custom
+skybox art, custom sound — comes from uploaded meshes, textures, and audio
+made in external 3D/art tools, then imported via Studio. That's not
+something a script (or this environment) can produce; everything above is
+built purely from Roblox's primitives and built-in effects. It's a real
+step up from flat/default, not a ceiling-hitting match for a game with a
+professional art team.
+
 ## How it works
 
 - `src/ReplicatedStorage/Modules/GameConfig.lua` — every tunable number
@@ -139,6 +154,9 @@ an `Atmosphere` instance) for a proper ocean look, no assets required.
   + sand map barrier, once, on first run
 - `src/ServerScriptService/CoralGarden.server.lua` — scatters decorative
   coral across the seabed, once, on first run
+- `src/ServerScriptService/GraphicsPolish.server.lua` — post-processing,
+  small islands, and ambient bubbles, once, on first run (independent of
+  WorldSetup, so a mistake here can't take down the core water generation)
 - `src/ServerScriptService/SkySpawn.server.lua` — the sky spawn platform and
   its teleport portal down to the water
 - `src/ServerScriptService/RaftSpawner.server.lua` / `RaftDestruction.server.lua`

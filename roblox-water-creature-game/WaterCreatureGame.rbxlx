@@ -35,6 +35,9 @@ Config.BarrierHeight = 150
 -- Corals scattered across the seabed, purely decorative.
 Config.CoralCount = 150
 
+-- Small islands ringing the outer play area, purely decorative.
+Config.IslandCount = 6
+
 -- The sky spawn platform + portal every player (re)spawns on.
 Config.SkySpawnHeight = 250 -- studs above the water surface
 Config.SkySpawnPlatformSize = Vector3.new(40, 2, 40)
@@ -436,11 +439,124 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Folder" referent="RBX8">
+		<Item class="Script" referent="RBX8">
+			<Properties>
+				<string name="Name">GraphicsPolish</string>
+				<ProtectedString name="Source"><![CDATA[-- Extra visual polish layered on top of the core world: post-processing for
+-- a punchier, more vibrant look, small islands ringing the outer play area
+-- for visual variety, and ambient underwater bubbles. All built from
+-- Roblox's own primitives/effects/built-in particle texture — no uploaded
+-- assets needed (or available from here).
+--
+-- Deliberately kept in its own script, independent of WorldSetup.server.lua:
+-- every step below is wrapped in `safely()` so if any one of them is wrong
+-- (an outdated API, a typo'd enum), it's skipped with a warning instead of
+-- crashing — and even a full failure here can never take down the core
+-- water/terrain generation in WorldSetup, since that's a separate script.
+
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+if Workspace:GetAttribute("GraphicsPolishApplied") then
+	return
+end
+
+local function safely(label, fn)
+	local ok, err = pcall(fn)
+	if not ok then
+		warn("GraphicsPolish: '" .. label .. "' failed and was skipped — " .. tostring(err))
+	end
+end
+
+safely("color grading", function()
+	local colorCorrection = Instance.new("ColorCorrectionEffect")
+	colorCorrection.Name = "GraphicsPolishColor"
+	colorCorrection.Contrast = 0.15
+	colorCorrection.Saturation = 0.3
+	colorCorrection.TintColor = Color3.fromRGB(255, 250, 240)
+	colorCorrection.Parent = Lighting
+end)
+
+safely("bloom", function()
+	local bloom = Instance.new("BloomEffect")
+	bloom.Name = "GraphicsPolishBloom"
+	bloom.Intensity = 0.4
+	bloom.Size = 24
+	bloom.Threshold = 1.4
+	bloom.Parent = Lighting
+end)
+
+safely("sun rays", function()
+	local sunRays = Instance.new("SunRaysEffect")
+	sunRays.Name = "GraphicsPolishSunRays"
+	sunRays.Intensity = 0.15
+	sunRays.Spread = 0.6
+	sunRays.Parent = Lighting
+end)
+
+safely("islands", function()
+	local terrain = Workspace.Terrain
+	local waterSurfaceY = Config.WaterCenter.Y + Config.WaterSize.Y / 2
+
+	for _ = 1, Config.IslandCount do
+		local angle = math.random() * math.pi * 2
+		local distance = math.random(Config.SpawnRadius * 0.75, Config.SpawnRadius * 0.95)
+		local x = Config.WaterCenter.X + math.cos(angle) * distance
+		local z = Config.WaterCenter.Z + math.sin(angle) * distance
+
+		local radius = math.random(20, 40)
+		local peakHeight = math.random(8, 18)
+		local topY = waterSurfaceY + peakHeight
+		local baseY = Config.SeabedY
+		local bodyHeight = topY - baseY
+
+		terrain:FillCylinder(CFrame.new(x, baseY + bodyHeight / 2, z), bodyHeight, radius, Enum.Material.Rock)
+		terrain:FillCylinder(CFrame.new(x, waterSurfaceY + 1, z), 6, radius * 1.1, Enum.Material.Sand)
+		terrain:FillCylinder(CFrame.new(x, topY - 2, z), 6, radius * 0.55, Enum.Material.Grass)
+	end
+end)
+
+safely("underwater bubbles", function()
+	local holder = Instance.new("Part")
+	holder.Name = "BubbleField"
+	holder.Size = Vector3.new(Config.SpawnRadius * 2, 1, Config.SpawnRadius * 2)
+	holder.CFrame = CFrame.new(Config.WaterCenter.X, Config.SeabedY + 2, Config.WaterCenter.Z)
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.Transparency = 1
+	holder.Parent = Workspace
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(Color3.fromRGB(220, 240, 255))
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.15),
+		NumberSequenceKeypoint.new(1, 0.4),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.6),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Lifetime = NumberRange.new(6, 10)
+	emitter.Rate = 8
+	emitter.Speed = NumberRange.new(4, 7)
+	emitter.SpreadAngle = Vector2.new(6, 6)
+	emitter.Acceleration = Vector3.new(0, 6, 0)
+	emitter.Parent = holder
+end)
+
+Workspace:SetAttribute("GraphicsPolishApplied", true)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Folder" referent="RBX9">
 			<Properties>
 				<string name="Name">Modules</string>
 			</Properties>
-			<Item class="ModuleScript" referent="RBX9">
+			<Item class="ModuleScript" referent="RBX10">
 				<Properties>
 					<string name="Name">CreatureAppearance</string>
 					<ProtectedString name="Source"><![CDATA[-- Makes the player's default Roblox character look like a fish: strips
@@ -632,7 +748,7 @@ return CreatureAppearance
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX10">
+			<Item class="ModuleScript" referent="RBX11">
 				<Properties>
 					<string name="Name">PlayerProgress</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP, Evolution), the
@@ -795,7 +911,7 @@ return PlayerProgress
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX11">
+			<Item class="ModuleScript" referent="RBX12">
 				<Properties>
 					<string name="Name">PlayerUpgrades</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's shop upgrade tiers (a non-leaderstat "Upgrades" folder,
@@ -904,7 +1020,7 @@ return PlayerUpgrades
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX12">
+			<Item class="ModuleScript" referent="RBX13">
 				<Properties>
 					<string name="Name">RobuxShop</string>
 					<ProtectedString name="Source"><![CDATA[-- The "Robux Shop": real-money super powers bought via MarketplaceService
@@ -1054,7 +1170,7 @@ return RobuxShop
 				</Properties>
 			</Item>
 		</Item>
-		<Item class="Script" referent="RBX13">
+		<Item class="Script" referent="RBX14">
 			<Properties>
 				<string name="Name">RaftDestruction</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
@@ -1111,7 +1227,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX14">
+		<Item class="Script" referent="RBX15">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -1202,7 +1318,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX15">
+		<Item class="Script" referent="RBX16">
 			<Properties>
 				<string name="Name">ShipCannons</string>
 				<ProtectedString name="Source"><![CDATA[-- Ships tagged "Cannon" (Frigates and Galleons — see ShipSpawner) periodically
@@ -1320,7 +1436,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX16">
+		<Item class="Script" referent="RBX17">
 			<Properties>
 				<string name="Name">ShipCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
@@ -1402,7 +1518,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX17">
+		<Item class="Script" referent="RBX18">
 			<Properties>
 				<string name="Name">ShipMovement</string>
 				<ProtectedString name="Source"><![CDATA[-- Makes each ship slowly drift in a small circle around its spawn point,
@@ -1449,7 +1565,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX18">
+		<Item class="Script" referent="RBX19">
 			<Properties>
 				<string name="Name">ShipSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
@@ -1689,7 +1805,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX19">
+		<Item class="Script" referent="RBX20">
 			<Properties>
 				<string name="Name">ShopHandler</string>
 				<ProtectedString name="Source"><![CDATA[-- Server side of both shops:
@@ -1762,7 +1878,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX20">
+		<Item class="Script" referent="RBX21">
 			<Properties>
 				<string name="Name">SkySpawn</string>
 				<ProtectedString name="Source"><![CDATA[-- Every player (re)spawns on an invisible, walkable platform high above the
@@ -1870,7 +1986,7 @@ Workspace:SetAttribute("SkySpawnGenerated", true)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX21">
+		<Item class="Script" referent="RBX22">
 			<Properties>
 				<string name="Name">WorldSetup</string>
 				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor
@@ -1917,9 +2033,9 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 	fillWall(-(halfX + Config.BarrierThickness / 2), 0, Config.BarrierThickness, outerZ * 2) -- west
 
 	-- Nicer water look than the flat default.
-	terrain.WaterColor = Color3.fromRGB(15, 80, 120)
-	terrain.WaterTransparency = 0.6
-	terrain.WaterReflectance = 0.15
+	terrain.WaterColor = Color3.fromRGB(10, 135, 150)
+	terrain.WaterTransparency = 0.55
+	terrain.WaterReflectance = 0.2
 	terrain.WaterWaveSize = 0.15
 	terrain.WaterWaveSpeed = 8
 
@@ -1949,15 +2065,15 @@ Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX22">
+	<Item class="StarterPlayer" referent="RBX23">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX23">
+		<Item class="StarterPlayerScripts" referent="RBX24">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX24">
+			<Item class="LocalScript" referent="RBX25">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
@@ -2037,7 +2153,7 @@ refreshDepthChargeLabel()
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX25">
+			<Item class="LocalScript" referent="RBX26">
 				<Properties>
 					<string name="Name">UpgradeShop</string>
 					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with two tabs:

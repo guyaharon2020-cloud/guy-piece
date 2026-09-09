@@ -42,9 +42,9 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 	fillWall(-(halfX + Config.BarrierThickness / 2), 0, Config.BarrierThickness, outerZ * 2) -- west
 
 	-- Nicer water look than the flat default.
-	terrain.WaterColor = Color3.fromRGB(15, 80, 120)
-	terrain.WaterTransparency = 0.6
-	terrain.WaterReflectance = 0.15
+	terrain.WaterColor = Color3.fromRGB(10, 135, 150)
+	terrain.WaterTransparency = 0.55
+	terrain.WaterReflectance = 0.2
 	terrain.WaterWaveSize = 0.15
 	terrain.WaterWaveSpeed = 8
 

@@ -16,6 +16,9 @@ Config.BarrierHeight = 150
 -- Corals scattered across the seabed, purely decorative.
 Config.CoralCount = 150
 
+-- Small islands ringing the outer play area, purely decorative.
+Config.IslandCount = 6
+
 -- The sky spawn platform + portal every player (re)spawns on.
 Config.SkySpawnHeight = 250 -- studs above the water surface
 Config.SkySpawnPlatformSize = Vector3.new(40, 2, 40)
