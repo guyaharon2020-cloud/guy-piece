@@ -32,7 +32,7 @@ local function spawnBug(owner, bounds)
 	local bug = Instance.new("Part")
 	bug.Name = "Bug"
 	bug.Shape = Enum.PartType.Ball
-	bug.Size = Vector3.new(1, 1, 1.4)
+	bug.Size = Vector3.new(2, 2, 2.6)
 	bug.Color = Color3.fromRGB(45, 32, 20)
 	bug.Material = Enum.Material.SmoothPlastic
 	bug.CanCollide = false

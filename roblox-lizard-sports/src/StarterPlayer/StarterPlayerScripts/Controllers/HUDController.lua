@@ -27,6 +27,19 @@ function HUDController.Init(remotes, PlayerState)
 
 	local screenGui = create("ScreenGui", { Name = "LizardHUD", ResetOnSpawn = false }, playerGui)
 
+	-- Dead-center crosshair: the tongue fires straight down the camera's
+	-- look vector, so this is the only way to actually see what it'll hit.
+	create("Frame", {
+		Name = "Crosshair",
+		Size = UDim2.new(0, 6, 0, 6),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		BackgroundColor3 = Color3.fromRGB(255, 90, 140),
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		Rotation = 45,
+	}, screenGui)
+
 	-- Top-left: coins / wins.
 	local topBar = create("Frame", {
 		Name = "TopBar",

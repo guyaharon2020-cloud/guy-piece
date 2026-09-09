@@ -150,7 +150,12 @@ local function onClimbState(player, active, moveVector)
 	end
 end
 
-local function onTongueFire(player, direction)
+-- How far the client-reported camera position may be from the character
+-- before we stop trusting it and fall back to the head (generous enough to
+-- cover any normal third-person zoom distance).
+local MAX_CAMERA_ORIGIN_DISTANCE = 150
+
+local function onTongueFire(player, direction, cameraPosition)
 	local state = states[player]
 	local character = player.Character
 	if not state or not character then
@@ -177,9 +182,18 @@ local function onTongueFire(player, direction)
 	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 	raycastParams.FilterDescendantsInstances = { character }
 
+	-- Cast from the camera, not the head: on a third-person camera the head
+	-- is offset from what's actually on screen, so a head-origin ray misses
+	-- anything the player's reticle looks lined up with. The client-reported
+	-- camera position is sanity-checked against the character before we
+	-- trust it -- this is a low-stakes minigame, not a competitive shooter.
 	local origin = head.Position
+	if typeof(cameraPosition) == "Vector3" and (cameraPosition - head.Position).Magnitude <= MAX_CAMERA_ORIGIN_DISTANCE then
+		origin = cameraPosition
+	end
+
 	local result = workspace:Raycast(origin, direction * range, raycastParams)
-	playTongueEffect(origin, result and result.Position or (origin + direction * range))
+	playTongueEffect(head.Position, result and result.Position or (origin + direction * range))
 
 	if result and CollectionService:HasTag(result.Instance, "Catchable") then
 		AbilityService.BugCaught:Fire(player, result.Instance)

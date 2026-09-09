@@ -33,7 +33,10 @@ function InputController.Init(remotes)
 			local character = player.Character
 			local camera = workspace.CurrentCamera
 			if character and camera then
-				remotes.TongueFire:FireServer(camera.CFrame.LookVector)
+				-- Aim from the camera, not the head: on a third-person camera the
+				-- head is offset from what's on screen, so a head-origin ray would
+				-- miss anything the reticle looks lined up with.
+				remotes.TongueFire:FireServer(camera.CFrame.LookVector, camera.CFrame.Position)
 			end
 		elseif input.KeyCode == Enum.KeyCode.C then
 			remotes.ToggleCamo:FireServer()
