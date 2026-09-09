@@ -1,0 +1,31 @@
+{
+  "name": "LizardSportsLegend",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/ReplicatedStorage/Shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "PurchaseItem": { "$className": "RemoteEvent" },
+        "EquipSkin": { "$className": "RemoteEvent" },
+        "DataUpdated": { "$className": "RemoteEvent" },
+        "RequestSprint": { "$className": "RemoteEvent" },
+        "TongueFire": { "$className": "RemoteEvent" },
+        "ToggleCamo": { "$className": "RemoteEvent" },
+        "ClimbState": { "$className": "RemoteEvent" },
+        "StatsUpdated": { "$className": "RemoteEvent" },
+        "EventStatus": { "$className": "RemoteEvent" }
+      }
+    },
+    "ServerScriptService": {
+      "$path": "src/ServerScriptService"
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "src/StarterPlayer/StarterPlayerScripts"
+      }
+    }
+  }
+}
