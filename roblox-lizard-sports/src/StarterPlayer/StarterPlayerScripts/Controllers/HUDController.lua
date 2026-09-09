@@ -128,7 +128,7 @@ function HUDController.Init(remotes, PlayerState)
 		bannerHideAt = os.clock() + holdSeconds
 	end
 
-	remotes.EventStatus.OnClientEvent:Connect(function(data)
+	remotes:WaitForChild("EventStatus").OnClientEvent:Connect(function(data)
 		local eventName = EVENT_NAMES[data.event] or data.event
 
 		if data.state == "Starting" then

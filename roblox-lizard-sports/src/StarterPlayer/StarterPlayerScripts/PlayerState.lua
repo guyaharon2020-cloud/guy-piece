@@ -9,14 +9,14 @@ local stats = nil
 local profileListeners = {}
 
 function PlayerState.Init(remotes)
-	remotes.DataUpdated.OnClientEvent:Connect(function(newProfile)
+	remotes:WaitForChild("DataUpdated").OnClientEvent:Connect(function(newProfile)
 		profile = newProfile
 		for _, callback in ipairs(profileListeners) do
 			task.spawn(callback, profile)
 		end
 	end)
 
-	remotes.StatsUpdated.OnClientEvent:Connect(function(newStats)
+	remotes:WaitForChild("StatsUpdated").OnClientEvent:Connect(function(newStats)
 		stats = newStats
 	end)
 end
