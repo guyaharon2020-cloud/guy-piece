@@ -123,14 +123,22 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 		and (levelValue.Value < Config.MaxLevel or evolutionValue.Value < Config.MaxEvolutionTier) do
 		xpValue.Value -= Config.XPForLevel(levelValue.Value)
 
-		if levelValue.Value >= Config.LevelsPerEvolution and evolutionValue.Value < Config.MaxEvolutionTier then
+		-- Evolve as part of THIS transition (the one that would otherwise
+		-- take you to LevelsPerEvolution), using the same normal per-level
+		-- cost as any other level-up. Evolving only once you're ALREADY AT
+		-- LevelsPerEvolution and earn a full extra level's worth of XP on
+		-- top (the biggest single chunk in the whole curve) made evolution
+		-- look broken — you'd sit at level 12 with no feedback for a long,
+		-- silent stretch before anything happened.
+		local nextLevel = levelValue.Value + 1
+		if nextLevel >= Config.LevelsPerEvolution and evolutionValue.Value < Config.MaxEvolutionTier then
 			evolutionValue.Value += 1
 			levelValue.Value = 1
 			xpValue.Value = 0
 			evolved = true
 			evolutionName = Config.EvolutionTiers[evolutionValue.Value + 1].Name
 		else
-			levelValue.Value = math.min(levelValue.Value + 1, Config.MaxLevel)
+			levelValue.Value = math.min(nextLevel, Config.MaxLevel)
 		end
 
 		leveledUp = true

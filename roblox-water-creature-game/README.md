@@ -32,12 +32,21 @@ glow all change with your evolution tier:
 
 | Evolution tier | Level range | Look |
 |---|---|---|
-| 0 — Minnow | 1–12 | light blue, small fins |
-| 1 — Barracuda | 1–12 (after reset) | deeper blue, bigger fins, +speed |
-| 2 — Reef Shark | 1–12 | gray, bigger still |
-| 3 — Great White | 1–12 | pale gray, bigger |
-| 4 — Megalodon | 1–12 | near-black, huge |
+| 0 — Minnow | 1–11 | light blue, small fins |
+| 1 — Barracuda | 1–11 (after reset) | deeper blue, bigger fins, +speed |
+| 2 — Reef Shark | 1–11 | gray, bigger still |
+| 3 — Great White | 1–11 | pale gray, bigger |
+| 4 — Megalodon | 1–11 | near-black, huge |
 | 5 — Leviathan | 1–50 (final tier, no more resets) | teal/gold shimmer, biggest and fastest |
+
+Evolving happens on the level-up that would otherwise take you to level
+`LevelsPerEvolution` (12 by default) — using the same normal per-level XP
+cost as any other level-up, not an extra chunk on top. An earlier version
+required a full *additional* level's worth of XP (the single largest chunk
+in the whole curve) after already reaching level 12 before evolving, with
+zero visible feedback in between — it looked completely stuck. Progress
+toward your next level/evolution is now always visible via the XP bar in
+the HUD (bottom-left).
 
 Each evolution keeps your Money and all shop upgrade tiers — only Level and
 XP reset, and each tier's base speed/size is higher than the last, so it's

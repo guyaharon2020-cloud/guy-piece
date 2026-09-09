@@ -19,17 +19,48 @@ screenGui.Name = "CreatureHud"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Health bar + current attack name (bottom-left), tracking whichever
--- character is currently alive.
+-- XP bar + health bar + current attack name (bottom-left), tracking
+-- whichever character is currently alive. The XP bar exists specifically
+-- so progress toward the next level/evolution is always visible — without
+-- it, a big XP requirement (like the one right before evolving) can look
+-- like nothing is happening when it's actually just accumulating quietly.
 local statusFrame = Instance.new("Frame")
-statusFrame.Size = UDim2.new(0, 220, 0, 50)
-statusFrame.Position = UDim2.new(0, 20, 1, -70)
+statusFrame.Size = UDim2.new(0, 220, 0, 90)
+statusFrame.Position = UDim2.new(0, 20, 1, -110)
 statusFrame.BackgroundTransparency = 1
 statusFrame.Parent = screenGui
 
+local xpLabel = Instance.new("TextLabel")
+xpLabel.Size = UDim2.new(1, 0, 0, 16)
+xpLabel.Position = UDim2.new(0, 0, 0, 0)
+xpLabel.BackgroundTransparency = 1
+xpLabel.Font = Enum.Font.GothamBold
+xpLabel.TextSize = 13
+xpLabel.TextXAlignment = Enum.TextXAlignment.Left
+xpLabel.TextColor3 = Color3.fromRGB(220, 230, 255)
+xpLabel.TextStrokeTransparency = 0.5
+xpLabel.Text = ""
+xpLabel.Parent = statusFrame
+
+local xpBack = Instance.new("Frame")
+xpBack.Size = UDim2.new(1, 0, 0, 10)
+xpBack.Position = UDim2.new(0, 0, 0, 18)
+xpBack.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+xpBack.BorderSizePixel = 0
+xpBack.Parent = statusFrame
+Instance.new("UICorner", xpBack).CornerRadius = UDim.new(0, 5)
+
+local xpFill = Instance.new("Frame")
+xpFill.Name = "Fill"
+xpFill.Size = UDim2.new(0, 0, 1, 0)
+xpFill.BackgroundColor3 = Color3.fromRGB(120, 170, 255)
+xpFill.BorderSizePixel = 0
+xpFill.Parent = xpBack
+Instance.new("UICorner", xpFill).CornerRadius = UDim.new(0, 5)
+
 local healthBack = Instance.new("Frame")
 healthBack.Size = UDim2.new(1, 0, 0, 16)
-healthBack.Position = UDim2.new(0, 0, 0, 0)
+healthBack.Position = UDim2.new(0, 0, 0, 36)
 healthBack.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 healthBack.BorderSizePixel = 0
 healthBack.Parent = statusFrame
@@ -45,7 +76,7 @@ Instance.new("UICorner", healthFill).CornerRadius = UDim.new(0, 6)
 
 local attackLabel = Instance.new("TextLabel")
 attackLabel.Size = UDim2.new(1, 0, 0, 24)
-attackLabel.Position = UDim2.new(0, 0, 0, 20)
+attackLabel.Position = UDim2.new(0, 0, 0, 58)
 attackLabel.BackgroundTransparency = 1
 attackLabel.Font = Enum.Font.GothamBold
 attackLabel.TextSize = 15
@@ -73,6 +104,8 @@ end
 
 local leaderstats = player:WaitForChild("leaderstats")
 local evolutionValue = leaderstats:WaitForChild("Evolution")
+local levelValue = leaderstats:WaitForChild("Level")
+local xpValue = leaderstats:WaitForChild("XP")
 
 local function refreshAttackLabel()
 	local tierIndex = math.clamp(evolutionValue.Value + 1, 1, #Config.EvolutionTiers)
@@ -80,8 +113,18 @@ local function refreshAttackLabel()
 	attackLabel.Text = "Attack (F): " .. tier.Attack.Name
 end
 
+local function refreshXpBar()
+	local needed = Config.XPForLevel(levelValue.Value)
+	local ratio = needed > 0 and math.clamp(xpValue.Value / needed, 0, 1) or 0
+	xpFill.Size = UDim2.new(ratio, 0, 1, 0)
+	xpLabel.Text = string.format("Level %d — XP %d / %d", levelValue.Value, xpValue.Value, needed)
+end
+
 evolutionValue:GetPropertyChangedSignal("Value"):Connect(refreshAttackLabel)
+levelValue:GetPropertyChangedSignal("Value"):Connect(refreshXpBar)
+xpValue:GetPropertyChangedSignal("Value"):Connect(refreshXpBar)
 refreshAttackLabel()
+refreshXpBar()
 
 if player.Character then
 	bindToCharacter(player.Character)
