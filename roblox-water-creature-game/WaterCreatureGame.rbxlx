@@ -1,0 +1,452 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<External>null</External>
+	<External>null</External>
+	<Item class="Workspace" referent="RBX_Workspace">
+		<Properties>
+			<string name="Name">Workspace</string>
+		</Properties>
+	</Item>
+	<Item class="ReplicatedStorage" referent="RBX_ReplicatedStorage">
+		<Properties>
+			<string name="Name">ReplicatedStorage</string>
+		</Properties>
+		<Item class="Folder" referent="RBX_RS_Modules">
+			<Properties>
+				<string name="Name">Modules</string>
+			</Properties>
+			<Item class="ModuleScript" referent="RBX_GameConfig">
+				<Properties>
+					<string name="Name">GameConfig</string>
+					<ProtectedString name="Source"><![CDATA[-- Shared tuning values for the water-creature game.
+-- Edit these to change difficulty, spawn rates, and progression pace.
+
+local Config = {}
+
+-- World / water
+Config.WaterCenter = Vector3.new(0, -10, 0)
+Config.WaterSize = Vector3.new(1000, 60, 1000)
+
+-- Raft spawning
+Config.RaftSpawnInterval = 8 -- seconds between spawn attempts
+Config.MaxRafts = 12 -- rafts alive at once
+Config.SpawnRadius = 400 -- studs from the water center
+Config.HumansPerRaftMin = 2
+Config.HumansPerRaftMax = 6
+
+-- Economy: destroying a raft pays out per human that was on it
+Config.MoneyPerHuman = 1
+Config.XPPerHuman = 10
+
+-- Leveling: swim speed and size grow with level
+Config.BaseWalkSpeed = 40
+Config.WalkSpeedPerLevel = 3
+Config.SizePerLevel = 0.03 -- +3% scale per level
+Config.MaxLevel = 50
+
+-- XP required to go from `level` to `level + 1`
+function Config.XPForLevel(level)
+	return math.floor(100 * level ^ 1.35)
+end
+
+return Config
+]]></ProtectedString>
+				</Properties>
+			</Item>
+		</Item>
+	</Item>
+	<Item class="ServerScriptService" referent="RBX_ServerScriptService">
+		<Properties>
+			<string name="Name">ServerScriptService</string>
+		</Properties>
+		<Item class="Script" referent="RBX_WorldSetup">
+			<Properties>
+				<string name="Name">WorldSetup</string>
+				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor)
+-- the first time the server starts, so the place works with no manual
+-- Studio setup. Safe to re-run: it skips itself once already generated.
+
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+if not Workspace:GetAttribute("WaterWorldGenerated") then
+	local terrain = Workspace.Terrain
+
+	terrain:FillBlock(CFrame.new(Config.WaterCenter), Config.WaterSize, Enum.Material.Water)
+
+	local seabedCenter = Config.WaterCenter - Vector3.new(0, Config.WaterSize.Y / 2 + 5, 0)
+	local seabedSize = Vector3.new(Config.WaterSize.X, 10, Config.WaterSize.Z)
+	terrain:FillBlock(CFrame.new(seabedCenter), seabedSize, Enum.Material.Sand)
+
+	Workspace:SetAttribute("WaterWorldGenerated", true)
+end
+
+Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX_GameManager">
+			<Properties>
+				<string name="Name">GameManager</string>
+				<ProtectedString name="Source"><![CDATA[-- Bootstraps player progress (leaderstats) on join and re-applies level-based
+-- stats whenever a player's character respawns.
+
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+
+local function onPlayerAdded(player)
+	PlayerProgress.Init(player)
+
+	player.CharacterAdded:Connect(function()
+		task.wait(0.5) -- let the Humanoid finish rigging before we touch it
+		PlayerProgress.ApplyLevelStats(player)
+	end)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+
+for _, player in ipairs(Players:GetPlayers()) do
+	onPlayerAdded(player)
+end
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX_RaftSpawner">
+			<Properties>
+				<string name="Name">RaftSpawner</string>
+				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
+-- around the water. Each raft is tagged "Raft" so RaftDestruction.server.lua
+-- can find and wire it up without the two scripts needing direct references.
+
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local raftsFolder = Workspace:FindFirstChild("Rafts")
+if not raftsFolder then
+	raftsFolder = Instance.new("Folder")
+	raftsFolder.Name = "Rafts"
+	raftsFolder.Parent = Workspace
+end
+
+local function createHuman(position)
+	local human = Instance.new("Model")
+	human.Name = "Human"
+
+	local body = Instance.new("Part")
+	body.Name = "Body"
+	body.Size = Vector3.new(1, 2, 1)
+	body.CFrame = CFrame.new(position)
+	body.Anchored = true
+	body.CanCollide = false
+	body.Color = Color3.fromRGB(240, 200, 160)
+	body.Parent = human
+
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Shape = Enum.PartType.Ball
+	head.Size = Vector3.new(0.8, 0.8, 0.8)
+	head.CFrame = CFrame.new(position + Vector3.new(0, 1.4, 0))
+	head.Anchored = true
+	head.CanCollide = false
+	head.Color = Color3.fromRGB(255, 224, 189)
+	head.Parent = human
+
+	human.PrimaryPart = body
+	return human
+end
+
+local function spawnRaft()
+	if #raftsFolder:GetChildren() >= Config.MaxRafts then
+		return
+	end
+
+	local angle = math.random() * math.pi * 2
+	local distance = math.random(50, Config.SpawnRadius)
+	local x = Config.WaterCenter.X + math.cos(angle) * distance
+	local z = Config.WaterCenter.Z + math.sin(angle) * distance
+	local y = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 1 -- float on the surface
+
+	local raft = Instance.new("Model")
+	raft.Name = "Raft"
+
+	local hitbox = Instance.new("Part")
+	hitbox.Name = "Hitbox"
+	hitbox.Size = Vector3.new(10, 1, 10)
+	hitbox.CFrame = CFrame.new(x, y, z)
+	hitbox.Anchored = true
+	hitbox.Color = Color3.fromRGB(133, 94, 66)
+	hitbox.Material = Enum.Material.Wood
+	hitbox.Parent = raft
+
+	raft.PrimaryPart = hitbox
+
+	local humanCount = math.random(Config.HumansPerRaftMin, Config.HumansPerRaftMax)
+	for _ = 1, humanCount do
+		local offset = Vector3.new(math.random(-30, 30) / 10, 1, math.random(-30, 30) / 10)
+		local human = createHuman(hitbox.Position + offset)
+		human.Parent = raft
+	end
+
+	raft:SetAttribute("HumanCount", humanCount)
+	CollectionService:AddTag(hitbox, "Raft")
+	raft.Parent = raftsFolder
+end
+
+while true do
+	spawnRaft()
+	task.wait(Config.RaftSpawnInterval)
+end
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX_RaftDestruction">
+			<Properties>
+				<string name="Name">RaftDestruction</string>
+				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
+-- as soon as a player's creature touches it, paying that player based on how
+-- many humans were riding it.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+
+local debounced = {}
+
+local function onRaftTagged(hitbox)
+	local raft = hitbox.Parent
+	if not raft then
+		return
+	end
+
+	local connection
+	connection = hitbox.Touched:Connect(function(otherPart)
+		if debounced[hitbox] then
+			return
+		end
+
+		local character = otherPart.Parent
+		local player = character and Players:GetPlayerFromCharacter(character)
+		if not player then
+			return
+		end
+
+		debounced[hitbox] = true
+		connection:Disconnect()
+
+		local humanCount = raft:GetAttribute("HumanCount") or 0
+		PlayerProgress.AwardRaftDestruction(player, humanCount)
+
+		raft:Destroy()
+	end)
+
+	hitbox.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			debounced[hitbox] = nil
+		end
+	end)
+end
+
+CollectionService:GetInstanceAddedSignal("Raft"):Connect(onRaftTagged)
+
+for _, hitbox in ipairs(CollectionService:GetTagged("Raft")) do
+	onRaftTagged(hitbox)
+end
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Folder" referent="RBX_SSS_Modules">
+			<Properties>
+				<string name="Name">Modules</string>
+			</Properties>
+			<Item class="ModuleScript" referent="RBX_PlayerProgress">
+				<Properties>
+					<string name="Name">PlayerProgress</string>
+					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP) and the reward/level-up math.
+-- Server-authoritative: only server scripts call into this, never the client.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if not Remotes then
+	Remotes = Instance.new("Folder")
+	Remotes.Name = "Remotes"
+	Remotes.Parent = ReplicatedStorage
+end
+
+local NotifyEvent = Remotes:FindFirstChild("Notify")
+if not NotifyEvent then
+	NotifyEvent = Instance.new("RemoteEvent")
+	NotifyEvent.Name = "Notify"
+	NotifyEvent.Parent = Remotes
+end
+
+local PlayerProgress = {}
+
+function PlayerProgress.Init(player)
+	if player:FindFirstChild("leaderstats") then
+		return
+	end
+
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+
+	local level = Instance.new("IntValue")
+	level.Name = "Level"
+	level.Value = 1
+	level.Parent = leaderstats
+
+	local money = Instance.new("IntValue")
+	money.Name = "Money"
+	money.Value = 0
+	money.Parent = leaderstats
+
+	local xp = Instance.new("IntValue")
+	xp.Name = "XP"
+	xp.Value = 0
+	xp.Parent = leaderstats
+
+	leaderstats.Parent = player
+end
+
+function PlayerProgress.ApplyLevelStats(player)
+	local character = player.Character
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not character or not leaderstats then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	local level = leaderstats.Level.Value
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + (level - 1) * Config.WalkSpeedPerLevel
+
+	local scale = 1 + (level - 1) * Config.SizePerLevel
+	pcall(function()
+		character:ScaleTo(scale)
+	end)
+end
+
+-- Called when a player's creature destroys a raft. humanCount is how many
+-- humans were on that raft — money and XP both scale with it directly.
+function PlayerProgress.AwardRaftDestruction(player, humanCount)
+	if humanCount <= 0 then
+		return
+	end
+
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if not leaderstats then
+		return
+	end
+
+	local moneyEarned = humanCount * Config.MoneyPerHuman
+	local xpEarned = humanCount * Config.XPPerHuman
+
+	leaderstats.Money.Value += moneyEarned
+
+	local levelValue = leaderstats.Level
+	local xpValue = leaderstats.XP
+	local leveledUp = false
+
+	xpValue.Value += xpEarned
+
+	while levelValue.Value < Config.MaxLevel and xpValue.Value >= Config.XPForLevel(levelValue.Value) do
+		xpValue.Value -= Config.XPForLevel(levelValue.Value)
+		levelValue.Value += 1
+		leveledUp = true
+	end
+
+	if leveledUp then
+		PlayerProgress.ApplyLevelStats(player)
+	end
+
+	NotifyEvent:FireClient(player, {
+		humans = humanCount,
+		money = moneyEarned,
+		xp = xpEarned,
+		leveledUp = leveledUp,
+		level = levelValue.Value,
+	})
+end
+
+return PlayerProgress
+]]></ProtectedString>
+				</Properties>
+			</Item>
+		</Item>
+	</Item>
+	<Item class="StarterPlayer" referent="RBX_StarterPlayer">
+		<Properties>
+			<string name="Name">StarterPlayer</string>
+		</Properties>
+		<Item class="StarterPlayerScripts" referent="RBX_StarterPlayerScripts">
+			<Properties>
+				<string name="Name">StarterPlayerScripts</string>
+			</Properties>
+			<Item class="LocalScript" referent="RBX_CreatureHud">
+				<Properties>
+					<string name="Name">CreatureHud</string>
+					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
+-- local player's creature destroys a raft. Roblox's built-in leaderstats
+-- panel already shows Level/Money/XP in the player list, so this just adds
+-- the transient feedback.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local NotifyEvent = Remotes:WaitForChild("Notify")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CreatureHud"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local label = Instance.new("TextLabel")
+label.Size = UDim2.new(0, 500, 0, 40)
+label.Position = UDim2.new(0.5, -250, 0, 20)
+label.BackgroundTransparency = 1
+label.TextColor3 = Color3.fromRGB(255, 255, 255)
+label.TextStrokeTransparency = 0.4
+label.Font = Enum.Font.GothamBold
+label.TextSize = 24
+label.Text = ""
+label.TextTransparency = 1
+label.TextStrokeTransparency = 1
+label.Parent = screenGui
+
+NotifyEvent.OnClientEvent:Connect(function(data)
+	local text = string.format("+$%d  •  +%d XP  (%d humans)", data.money, data.xp, data.humans)
+	if data.leveledUp then
+		text ..= string.format("   LEVEL UP! Now level %d", data.level)
+	end
+	label.Text = text
+	label.TextTransparency = 0
+	label.TextStrokeTransparency = 0.4
+
+	task.delay(2.5, function()
+		TweenService:Create(label, TweenInfo.new(1), {
+			TextTransparency = 1,
+			TextStrokeTransparency = 1,
+		}):Play()
+	end)
+end)
+]]></ProtectedString>
+				</Properties>
+			</Item>
+		</Item>
+	</Item>
+</roblox>

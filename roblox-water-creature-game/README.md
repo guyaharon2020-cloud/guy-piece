@@ -29,7 +29,23 @@ Swimming itself needs no custom script — Roblox's default character
 controller automatically swims whenever the character is inside Terrain
 water, which `WorldSetup` generates for you.
 
-## Running it in Roblox Studio
+## Just open it
+
+**`WaterCreatureGame.rbxlx`** is a single, self-contained Roblox place file
+with everything already built in — no Rojo, no manual setup:
+
+1. Open Roblox Studio.
+2. **File → Open From File...** and pick `WaterCreatureGame.rbxlx`.
+3. Press **Play**. The sea and rafts generate automatically; swim into a
+   raft to destroy it and watch your `Money`/`Level`/`XP` update in the
+   player list (top right).
+
+To publish it as a real game, once it's open: **File → Publish to Roblox...**
+
+## Developing with Rojo (optional)
+
+The `src/` folder holds the same scripts as loose files if you'd rather
+edit them in a normal text editor and sync live into Studio:
 
 1. Install the [Rojo](https://rojo.space/) plugin in Studio (and the Rojo
    CLI, e.g. `cargo install rojo` or via [Aftman](https://github.com/LPGhatguy/aftman)).
@@ -39,13 +55,9 @@ water, which `WorldSetup` generates for you.
    ```
 3. In Studio, open (or create) a place, open the Rojo plugin panel, and
    click **Connect**.
-4. Press **Play**. The sea and rafts generate automatically; swim into a
-   raft to destroy it and watch your `Money`/`Level`/`XP` update in the
-   player list (top right).
 
-If you don't want to install Rojo, you can recreate the same instance tree
-by hand in Studio (Script/LocalScript/ModuleScript per the file names
-below) and paste each file's contents in.
+If you edit `src/`, keep `WaterCreatureGame.rbxlx` in sync by hand (or just
+use Rojo going forward and treat the `.rbxlx` as the initial snapshot).
 
 ## Customizing
 
