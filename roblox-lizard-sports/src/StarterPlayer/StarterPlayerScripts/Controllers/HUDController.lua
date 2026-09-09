@@ -25,7 +25,7 @@ function HUDController.Init(remotes, PlayerState)
 	local player = Players.LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui")
 
-	local screenGui = create("ScreenGui", { Name = "LizardHUD", ResetOnSpawnBehavior = Enum.ResetOnSpawnBehavior.Keep }, playerGui)
+	local screenGui = create("ScreenGui", { Name = "LizardHUD", ResetOnSpawn = false }, playerGui)
 
 	-- Top-left: coins / wins.
 	local topBar = create("Frame", {

@@ -117,7 +117,7 @@ function ShopController.Init(remotes, PlayerState)
 
 	local screenGui = create("ScreenGui", {
 		Name = "LizardShop",
-		ResetOnSpawnBehavior = Enum.ResetOnSpawnBehavior.Keep,
+		ResetOnSpawn = false,
 		Enabled = false,
 	}, playerGui)
 
