@@ -15,6 +15,7 @@ Config.BarrierHeight = 150
 
 -- Corals scattered across the seabed, purely decorative.
 Config.CoralCount = 150
+Config.GiantCoralCount = 15 -- big centerpiece formations (towers/fans/clams)
 
 -- Small islands ringing the outer play area, purely decorative.
 Config.IslandCount = 6
@@ -57,15 +58,51 @@ end
 -- next tier (new color/fins/base stats) and Level + XP reset to 1/0 so you
 -- level up again within the new tier. Money and shop upgrades are NOT reset.
 Config.LevelsPerEvolution = 12
+
+-- Each tier's Attack is what pressing the attack key (see AttackController
+-- / PlayerCombat) does — evolving swaps it immediately, since PlayerCombat
+-- always reads the attacker's CURRENT Evolution tier live, never a cached
+-- value.
+--   Type = "melee"    single target in front, within Range and ConeAngle
+--   Type = "dash"     lunge forward (DashSpeed) + melee hit during the dash
+--   Type = "aoe"      damages every other player within Range, all around
 Config.EvolutionTiers = {
-	{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0 },
-	{ Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140), FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15 },
-	{ Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78), FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3 },
-	{ Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90), FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5 },
-	{ Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28), FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8 },
-	{ Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200), FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2 },
+	{
+		Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150),
+		FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0,
+		Attack = { Name = "Nibble", Type = "melee", Range = 8, ConeAngle = 80, Damage = 8, Cooldown = 1.2 },
+	},
+	{
+		Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140),
+		FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15,
+		Attack = { Name = "Lunge Strike", Type = "dash", Range = 20, ConeAngle = 50, DashSpeed = 90, Damage = 12, Cooldown = 2.5 },
+	},
+	{
+		Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78),
+		FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3,
+		Attack = { Name = "Spin Bite", Type = "aoe", Range = 12, Damage = 14, Cooldown = 2.2 },
+	},
+	{
+		Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90),
+		FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5,
+		Attack = { Name = "Crushing Jaws", Type = "melee", Range = 10, ConeAngle = 60, Damage = 24, Cooldown = 2.8 },
+	},
+	{
+		Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28),
+		FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8,
+		Attack = { Name = "Tidal Slam", Type = "aoe", Range = 18, Damage = 22, Cooldown = 3.5 },
+	},
+	{
+		Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200),
+		FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2,
+		Attack = { Name = "Abyssal Roar", Type = "aoe", Range = 26, Damage = 32, Cooldown = 4.5 },
+	},
 }
 Config.MaxEvolutionTier = #Config.EvolutionTiers - 1 -- 0-indexed (tier 0 = Minnow)
+
+-- Players above this Y (i.e. still on/near the sky spawn platform) can
+-- neither attack nor be attacked — a simple anti-spawn-kill safe zone.
+Config.PvPSafeZoneY = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 50
 
 -- Ships: several types, each with its own size/color/human count. Types with
 -- HasCannon fire on nearby players at short range (see ShipCannons).
@@ -79,6 +116,8 @@ Config.ShipTypes = {
 		HullSize = Vector3.new(28, 6, 11),
 		HullColor = Color3.fromRGB(120, 85, 55),
 		CabinColor = Color3.fromRGB(150, 110, 70),
+		SailColor = Color3.fromRGB(235, 225, 205),
+		MastCount = 1,
 		HumansMin = 8,
 		HumansMax = 12,
 		HealthBonus = 0,
@@ -91,6 +130,8 @@ Config.ShipTypes = {
 		HullSize = Vector3.new(34, 7, 13),
 		HullColor = Color3.fromRGB(70, 75, 82),
 		CabinColor = Color3.fromRGB(45, 48, 55),
+		SailColor = Color3.fromRGB(220, 220, 225),
+		MastCount = 2,
 		HumansMin = 12,
 		HumansMax = 18,
 		HealthBonus = 6,
@@ -106,6 +147,8 @@ Config.ShipTypes = {
 		HullSize = Vector3.new(42, 8, 16),
 		HullColor = Color3.fromRGB(120, 35, 40),
 		CabinColor = Color3.fromRGB(150, 120, 40),
+		SailColor = Color3.fromRGB(235, 220, 180),
+		MastCount = 3,
 		HumansMin = 18,
 		HumansMax = 26,
 		HealthBonus = 14,

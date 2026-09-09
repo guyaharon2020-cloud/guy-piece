@@ -68,5 +68,3 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 
 	Workspace:SetAttribute("WaterWorldGenerated", true)
 end
-
-Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y

@@ -34,6 +34,7 @@ Config.BarrierHeight = 150
 
 -- Corals scattered across the seabed, purely decorative.
 Config.CoralCount = 150
+Config.GiantCoralCount = 15 -- big centerpiece formations (towers/fans/clams)
 
 -- Small islands ringing the outer play area, purely decorative.
 Config.IslandCount = 6
@@ -76,15 +77,51 @@ end
 -- next tier (new color/fins/base stats) and Level + XP reset to 1/0 so you
 -- level up again within the new tier. Money and shop upgrades are NOT reset.
 Config.LevelsPerEvolution = 12
+
+-- Each tier's Attack is what pressing the attack key (see AttackController
+-- / PlayerCombat) does — evolving swaps it immediately, since PlayerCombat
+-- always reads the attacker's CURRENT Evolution tier live, never a cached
+-- value.
+--   Type = "melee"    single target in front, within Range and ConeAngle
+--   Type = "dash"     lunge forward (DashSpeed) + melee hit during the dash
+--   Type = "aoe"      damages every other player within Range, all around
 Config.EvolutionTiers = {
-	{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0 },
-	{ Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140), FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15 },
-	{ Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78), FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3 },
-	{ Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90), FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5 },
-	{ Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28), FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8 },
-	{ Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200), FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2 },
+	{
+		Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150),
+		FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0,
+		Attack = { Name = "Nibble", Type = "melee", Range = 8, ConeAngle = 80, Damage = 8, Cooldown = 1.2 },
+	},
+	{
+		Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140),
+		FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15,
+		Attack = { Name = "Lunge Strike", Type = "dash", Range = 20, ConeAngle = 50, DashSpeed = 90, Damage = 12, Cooldown = 2.5 },
+	},
+	{
+		Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78),
+		FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3,
+		Attack = { Name = "Spin Bite", Type = "aoe", Range = 12, Damage = 14, Cooldown = 2.2 },
+	},
+	{
+		Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90),
+		FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5,
+		Attack = { Name = "Crushing Jaws", Type = "melee", Range = 10, ConeAngle = 60, Damage = 24, Cooldown = 2.8 },
+	},
+	{
+		Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28),
+		FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8,
+		Attack = { Name = "Tidal Slam", Type = "aoe", Range = 18, Damage = 22, Cooldown = 3.5 },
+	},
+	{
+		Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200),
+		FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2,
+		Attack = { Name = "Abyssal Roar", Type = "aoe", Range = 26, Damage = 32, Cooldown = 4.5 },
+	},
 }
 Config.MaxEvolutionTier = #Config.EvolutionTiers - 1 -- 0-indexed (tier 0 = Minnow)
+
+-- Players above this Y (i.e. still on/near the sky spawn platform) can
+-- neither attack nor be attacked — a simple anti-spawn-kill safe zone.
+Config.PvPSafeZoneY = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 50
 
 -- Ships: several types, each with its own size/color/human count. Types with
 -- HasCannon fire on nearby players at short range (see ShipCannons).
@@ -98,6 +135,8 @@ Config.ShipTypes = {
 		HullSize = Vector3.new(28, 6, 11),
 		HullColor = Color3.fromRGB(120, 85, 55),
 		CabinColor = Color3.fromRGB(150, 110, 70),
+		SailColor = Color3.fromRGB(235, 225, 205),
+		MastCount = 1,
 		HumansMin = 8,
 		HumansMax = 12,
 		HealthBonus = 0,
@@ -110,6 +149,8 @@ Config.ShipTypes = {
 		HullSize = Vector3.new(34, 7, 13),
 		HullColor = Color3.fromRGB(70, 75, 82),
 		CabinColor = Color3.fromRGB(45, 48, 55),
+		SailColor = Color3.fromRGB(220, 220, 225),
+		MastCount = 2,
 		HumansMin = 12,
 		HumansMax = 18,
 		HealthBonus = 6,
@@ -125,6 +166,8 @@ Config.ShipTypes = {
 		HullSize = Vector3.new(42, 8, 16),
 		HullColor = Color3.fromRGB(120, 35, 40),
 		CabinColor = Color3.fromRGB(150, 120, 40),
+		SailColor = Color3.fromRGB(235, 220, 180),
+		MastCount = 3,
 		HumansMin = 18,
 		HumansMax = 26,
 		HealthBonus = 14,
@@ -374,6 +417,150 @@ local function createSeaRod(position)
 	return part
 end
 
+-- A tall stacked "trunk" coral tower with a spiky crown on top. Each trunk
+-- segment is a Cylinder rotated 90° about Z (the same trusted rotation
+-- ShipSpawner uses for masts) so it stands upright instead of lying flat.
+local function createGiantCoralTower(position)
+	local model = Instance.new("Model")
+	model.Name = "GiantCoral"
+
+	local color = randomCoralColor()
+	local segments = math.random(4, 6)
+	local baseRadius = math.random(25, 40) / 10
+	local currentY = position.Y
+	local primary
+
+	for i = 1, segments do
+		local segHeight = math.random(35, 55) / 10
+		local segRadius = baseRadius * (1 - (i - 1) / segments * 0.5)
+
+		local segment = Instance.new("Part")
+		segment.Name = "Trunk"
+		segment.Shape = Enum.PartType.Cylinder
+		segment.Size = Vector3.new(segHeight, segRadius * 2, segRadius * 2)
+		segment.Color = color
+		segment.Material = Enum.Material.Slate
+		segment.Anchored = true
+		segment.CanCollide = false
+		segment.CanQuery = false
+		segment.CFrame = CFrame.new(position.X, currentY + segHeight / 2, position.Z) * CFrame.Angles(0, 0, math.rad(90))
+		segment.Parent = model
+
+		currentY += segHeight
+		primary = primary or segment
+	end
+
+	for _ = 1, math.random(4, 7) do
+		local branch = Instance.new("Part")
+		branch.Name = "CrownBranch"
+		branch.Size = Vector3.new(0.8, math.random(25, 45) / 10, 0.8)
+		branch.Color = color
+		branch.Material = Enum.Material.Slate
+		branch.Anchored = true
+		branch.CanCollide = false
+		branch.CanQuery = false
+
+		local tilt = math.rad(math.random(-30, 30))
+		local spin = math.rad(math.random(0, 360))
+		local horizontalOffset = Vector3.new(math.random(-15, 15) / 10, 0, math.random(-15, 15) / 10)
+		branch.CFrame = CFrame.new(Vector3.new(position.X, currentY, position.Z) + horizontalOffset)
+			* CFrame.Angles(tilt, spin, 0) * CFrame.new(0, branch.Size.Y / 2, 0)
+		branch.Parent = model
+	end
+
+	model.PrimaryPart = primary
+	return model
+end
+
+-- A big flat "hand fan" of thin translucent blades radiating from a shared
+-- base point. Each blade is only rolled (rotated about local Z) then moved
+-- along its OWN now-tilted local Y — standard CFrame composition, so each
+-- blade ends up offset outward at its own angle from the same base, exactly
+-- like a real fan.
+local function createGiantFanCoral(position)
+	local model = Instance.new("Model")
+	model.Name = "GiantCoral"
+
+	local color = randomCoralColor()
+	local bladeCount = math.random(7, 11)
+	local fanRadius = math.random(45, 70) / 10
+	local primary
+
+	for i = 1, bladeCount do
+		local t = (i - 1) / (bladeCount - 1)
+		local angle = math.rad(-60 + t * 120)
+
+		local blade = Instance.new("Part")
+		blade.Name = "FanBlade"
+		blade.Size = Vector3.new(0.15, fanRadius, fanRadius * 0.35)
+		blade.Color = color
+		blade.Material = Enum.Material.Glass
+		blade.Transparency = 0.35
+		blade.Anchored = true
+		blade.CanCollide = false
+		blade.CanQuery = false
+		blade.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, angle) * CFrame.new(0, fanRadius / 2, 0)
+		blade.Parent = model
+
+		primary = primary or blade
+	end
+
+	model.PrimaryPart = primary
+	return model
+end
+
+-- A giant clam: two large domed "shells" opened at an angle around a
+-- glowing pearl. Uses only Ball shapes, so there's no orientation ambiguity
+-- to get wrong.
+local function createGiantClam(position)
+	local model = Instance.new("Model")
+	model.Name = "GiantCoral"
+
+	local shellColor = Color3.fromRGB(235, 225, 245)
+	local shellSize = Vector3.new(math.random(60, 90) / 10, math.random(30, 45) / 10, math.random(50, 75) / 10)
+
+	local bottomShell = Instance.new("Part")
+	bottomShell.Name = "ClamBottom"
+	bottomShell.Shape = Enum.PartType.Ball
+	bottomShell.Size = shellSize
+	bottomShell.Color = shellColor
+	bottomShell.Material = Enum.Material.Marble
+	bottomShell.Anchored = true
+	bottomShell.CanCollide = false
+	bottomShell.CanQuery = false
+	bottomShell.CFrame = CFrame.new(position + Vector3.new(0, shellSize.Y * 0.25, 0))
+	bottomShell.Parent = model
+
+	local topShell = Instance.new("Part")
+	topShell.Name = "ClamTop"
+	topShell.Shape = Enum.PartType.Ball
+	topShell.Size = shellSize
+	topShell.Color = shellColor
+	topShell.Material = Enum.Material.Marble
+	topShell.Anchored = true
+	topShell.CanCollide = false
+	topShell.CanQuery = false
+	topShell.CFrame = CFrame.new(position + Vector3.new(0, shellSize.Y * 0.6, 0))
+		* CFrame.Angles(math.rad(35), 0, 0)
+		* CFrame.new(0, -shellSize.Y * 0.15, shellSize.Z * 0.3)
+	topShell.Parent = model
+
+	local pearl = Instance.new("Part")
+	pearl.Name = "Pearl"
+	pearl.Shape = Enum.PartType.Ball
+	pearl.Size = Vector3.new(1.2, 1.2, 1.2)
+	pearl.Color = Color3.fromRGB(255, 250, 230)
+	pearl.Material = Enum.Material.Neon
+	pearl.Anchored = true
+	pearl.CanCollide = false
+	pearl.CanQuery = false
+	pearl.CFrame = CFrame.new(position + Vector3.new(0, shellSize.Y * 0.35, 0))
+	pearl.Parent = model
+
+	model.PrimaryPart = bottomShell
+	return model
+end
+
 local coralsFolder = Instance.new("Folder")
 coralsFolder.Name = "Corals"
 
@@ -397,6 +584,37 @@ for _ = 1, Config.CoralCount do
 	end
 
 	piece.Parent = coralsFolder
+end
+
+-- Big centerpiece formations, scattered in among the regular corals. Each
+-- one is wrapped individually so a mistake in one giant piece never stops
+-- the rest (regular corals included, since this comes after them) from
+-- placing.
+for _ = 1, Config.GiantCoralCount do
+	local ok, err = pcall(function()
+		local angle = math.random() * math.pi * 2
+		local distance = math.random(0, Config.SpawnRadius)
+		local position = Vector3.new(
+			Config.WaterCenter.X + math.cos(angle) * distance,
+			Config.SeabedY,
+			Config.WaterCenter.Z + math.sin(angle) * distance
+		)
+
+		local roll = math.random()
+		local piece
+		if roll < 0.4 then
+			piece = createGiantCoralTower(position)
+		elseif roll < 0.75 then
+			piece = createGiantFanCoral(position)
+		else
+			piece = createGiantClam(position)
+		end
+
+		piece.Parent = coralsFolder
+	end)
+	if not ok then
+		warn("CoralGarden: a giant coral piece failed and was skipped — " .. tostring(err))
+	end
 end
 
 coralsFolder.Parent = Workspace
@@ -1172,6 +1390,132 @@ return RobuxShop
 		</Item>
 		<Item class="Script" referent="RBX14">
 			<Properties>
+				<string name="Name">PlayerCombat</string>
+				<ProtectedString name="Source"><![CDATA[-- Player-vs-player combat. Each evolution tier grants a different attack
+-- (Config.EvolutionTiers[i].Attack) — this script always reads the
+-- attacker's CURRENT Evolution tier live, off their leaderstats, every time
+-- they attack. There's no cached "equipped attack" anywhere, so evolving
+-- swaps your moveset on the very next attack with no extra bookkeeping.
+--
+-- Fully server-authoritative: the client only ever requests an attack (no
+-- payload), and this script decides cooldown, targets, and damage. Damage
+-- taken is reduced by the target's Armor/Golden Scales, same as ship
+-- combat.
+
+local Players = game:GetService("Players")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if not Remotes then
+	Remotes = Instance.new("Folder")
+	Remotes.Name = "Remotes"
+	Remotes.Parent = ReplicatedStorage
+end
+
+local AttackEvent = Remotes:FindFirstChild("Attack")
+if not AttackEvent then
+	AttackEvent = Instance.new("RemoteEvent")
+	AttackEvent.Name = "Attack"
+	AttackEvent.Parent = Remotes
+end
+
+local AttackFXEvent = Remotes:FindFirstChild("AttackFX")
+if not AttackFXEvent then
+	AttackFXEvent = Instance.new("RemoteEvent")
+	AttackFXEvent.Name = "AttackFX"
+	AttackFXEvent.Parent = Remotes
+end
+
+local lastAttackAt = {}
+
+local function isInSafeZone(character)
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	return rootPart and rootPart.Position.Y > Config.PvPSafeZoneY
+end
+
+local function getAttackForPlayer(player)
+	local leaderstats = player:FindFirstChild("leaderstats")
+	local tierIndex = (leaderstats and leaderstats.Evolution.Value or 0) + 1
+	local tier = Config.EvolutionTiers[math.clamp(tierIndex, 1, #Config.EvolutionTiers)]
+	return tier.Attack, tier
+end
+
+AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
+	local attackerCharacter = attackerPlayer.Character
+	local attackerRoot = attackerCharacter and attackerCharacter:FindFirstChild("HumanoidRootPart")
+	local attackerHumanoid = attackerCharacter and attackerCharacter:FindFirstChildOfClass("Humanoid")
+	if not attackerRoot or not attackerHumanoid or attackerHumanoid.Health <= 0 then
+		return
+	end
+
+	if isInSafeZone(attackerCharacter) then
+		return
+	end
+
+	local attack, tier = getAttackForPlayer(attackerPlayer)
+	if not attack then
+		return
+	end
+
+	local now = os.clock()
+	if lastAttackAt[attackerPlayer] and now - lastAttackAt[attackerPlayer] < attack.Cooldown then
+		return
+	end
+	lastAttackAt[attackerPlayer] = now
+
+	if attack.Type == "dash" and attack.DashSpeed then
+		local bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
+		bodyVelocity.Velocity = attackerRoot.CFrame.LookVector * attack.DashSpeed
+		bodyVelocity.Parent = attackerRoot
+		Debris:AddItem(bodyVelocity, 0.3)
+	end
+
+	for _, targetPlayer in ipairs(Players:GetPlayers()) do
+		if targetPlayer ~= attackerPlayer then
+			local targetCharacter = targetPlayer.Character
+			local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+			local targetHumanoid = targetCharacter and targetCharacter:FindFirstChildOfClass("Humanoid")
+
+			if targetRoot and targetHumanoid and targetHumanoid.Health > 0 and not isInSafeZone(targetCharacter) then
+				local offset = targetRoot.Position - attackerRoot.Position
+				local distance = offset.Magnitude
+				local inRange = distance <= attack.Range
+
+				local inCone = true
+				if attack.Type == "melee" or attack.Type == "dash" then
+					if distance > 0.01 then
+						local toTarget = offset.Unit
+						local facing = attackerRoot.CFrame.LookVector
+						local angle = math.deg(math.acos(math.clamp(facing:Dot(toTarget), -1, 1)))
+						inCone = angle <= (attack.ConeAngle or 180) / 2
+					end
+				end
+
+				if inRange and inCone then
+					local damage = PlayerUpgrades.ReduceIncomingDamage(targetPlayer, attack.Damage)
+					targetHumanoid:TakeDamage(damage)
+				end
+			end
+		end
+	end
+
+	AttackFXEvent:FireAllClients(attackerRoot.Position, attack.Range, tier.FinColor)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	lastAttackAt[player] = nil
+end)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX15">
+			<Properties>
 				<string name="Name">RaftDestruction</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
 -- as soon as a player's creature touches it, paying that player based on how
@@ -1227,7 +1571,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX15">
+		<Item class="Script" referent="RBX16">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -1318,7 +1662,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX16">
+		<Item class="Script" referent="RBX17">
 			<Properties>
 				<string name="Name">ShipCannons</string>
 				<ProtectedString name="Source"><![CDATA[-- Ships tagged "Cannon" (Frigates and Galleons — see ShipSpawner) periodically
@@ -1436,7 +1780,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX17">
+		<Item class="Script" referent="RBX18">
 			<Properties>
 				<string name="Name">ShipCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
@@ -1518,7 +1862,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX18">
+		<Item class="Script" referent="RBX19">
 			<Properties>
 				<string name="Name">ShipMovement</string>
 				<ProtectedString name="Source"><![CDATA[-- Makes each ship slowly drift in a small circle around its spawn point,
@@ -1565,13 +1909,21 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX19">
+		<Item class="Script" referent="RBX20">
 			<Properties>
 				<string name="Name">ShipSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
 -- several types (see GameConfig.ShipTypes) with different sizes, colors,
 -- and human counts. Types with HasCannon also get tagged "Cannon" so
 -- ShipCannons.server.lua fires on nearby players.
+--
+-- The hull's local X axis is its length (bow/stern), Z is its beam
+-- (port/starboard) — every decoration below is placed relative to that.
+--
+-- All the decorative detail (bow, masts/sails, railings, bowsprit,
+-- portholes, wake trail) is built in one pcall-wrapped pass per ship: if
+-- any single piece has a mistake, the ship still spawns with its working
+-- hitbox/health/humans intact — only the decoration is skipped.
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1654,40 +2006,24 @@ local function createHealthBar(ship, hull, maxHealth)
 	end)
 end
 
--- Decorative cannon barrels sticking out both sides of the hull, purely
--- visual (the actual firing logic lives in ShipCannons.server.lua).
-local function addCannonBarrels(ship, hull)
-	for _, side in ipairs({ -1, 1 }) do
-		local barrel = Instance.new("Part")
-		barrel.Name = "CannonBarrel"
-		barrel.Shape = Enum.PartType.Cylinder
-		barrel.Size = Vector3.new(3, 0.8, 0.8)
-		barrel.Color = Color3.fromRGB(35, 35, 38)
-		barrel.Material = Enum.Material.Metal
-		barrel.Anchored = true
-		barrel.CanCollide = false
-		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, 0, math.rad(90))
-		barrel.Parent = ship
-	end
+-- A pointed prow: a WedgePart whose taper runs along its own local Z axis by
+-- default, rotated 90° about Y so that taper instead runs along the hull's
+-- local X (length) axis — the flat, full-height face blends into the hull,
+-- tapering forward to a point.
+local function addBow(ship, hull, shipType)
+	local bowLength = hull.Size.X * 0.18
+	local bow = Instance.new("WedgePart")
+	bow.Name = "Bow"
+	bow.Size = Vector3.new(hull.Size.Z, hull.Size.Y, bowLength)
+	bow.Color = shipType.HullColor
+	bow.Material = Enum.Material.WoodPlanks
+	bow.Anchored = true
+	bow.CanCollide = false
+	bow.CFrame = hull.CFrame * CFrame.new(hull.Size.X / 2 + bowLength / 2, 0, 0) * CFrame.Angles(0, math.rad(90), 0)
+	bow.Parent = ship
 end
 
--- Flag, railings, and a bowsprit for a more detailed, ship-like silhouette.
--- The hull's local X axis is its length (bow/stern), Z is its beam
--- (port/starboard) — matches the cannon barrel and human-scatter offsets
--- above.
-local function addShipDetails(ship, hull, shipType)
-	local mastTop = hull.CFrame * CFrame.new(2, 18, 0)
-
-	local flag = Instance.new("WedgePart")
-	flag.Name = "Flag"
-	flag.Size = Vector3.new(0.2, 2.5, 4)
-	flag.Color = shipType.HullColor
-	flag.Material = Enum.Material.Fabric
-	flag.Anchored = true
-	flag.CanCollide = false
-	flag.CFrame = mastTop * CFrame.new(0, -1, 2) * CFrame.Angles(0, math.rad(90), 0)
-	flag.Parent = ship
-
+local function addRailingsAndBowsprit(ship, hull)
 	for _, side in ipairs({ -1, 1 }) do
 		local rail = Instance.new("Part")
 		rail.Name = "Railing"
@@ -1709,6 +2045,163 @@ local function addShipDetails(ship, hull, shipType)
 	bowsprit.CanCollide = false
 	bowsprit.CFrame = hull.CFrame * CFrame.new(hull.Size.X / 2 + 3, hull.Size.Y / 2, 0) * CFrame.Angles(0, 0, math.rad(10))
 	bowsprit.Parent = ship
+end
+
+-- One mast with a crosswise square sail (and a colored stripe matching the
+-- hull) at hull-local X offset `xOffset`. The tallest/foremost mast also
+-- gets the flag.
+local function addMast(ship, hull, shipType, xOffset, height, withFlag)
+	local mast = Instance.new("Part")
+	mast.Name = "Mast"
+	mast.Shape = Enum.PartType.Cylinder
+	mast.Size = Vector3.new(height, 1, 1)
+	mast.CFrame = hull.CFrame * CFrame.new(xOffset, hull.Size.Y / 2 + height / 2, 0) * CFrame.Angles(0, 0, math.rad(90))
+	mast.Anchored = true
+	mast.CanCollide = false
+	mast.Color = Color3.fromRGB(70, 50, 35)
+	mast.Parent = ship
+
+	local sailHeight = height * 0.55
+	local sailWidth = hull.Size.Z * 0.75
+	local sailY = hull.Size.Y / 2 + height * 0.55
+
+	local sail = Instance.new("Part")
+	sail.Name = "Sail"
+	sail.Size = Vector3.new(0.3, sailHeight, sailWidth)
+	sail.Color = shipType.SailColor
+	sail.Material = Enum.Material.Fabric
+	sail.Anchored = true
+	sail.CanCollide = false
+	sail.CFrame = hull.CFrame * CFrame.new(xOffset, sailY, 0)
+	sail.Parent = ship
+
+	local stripe = Instance.new("Part")
+	stripe.Name = "SailStripe"
+	stripe.Size = Vector3.new(0.32, sailHeight * 0.18, sailWidth)
+	stripe.Color = shipType.HullColor
+	stripe.Material = Enum.Material.Fabric
+	stripe.Anchored = true
+	stripe.CanCollide = false
+	stripe.CFrame = hull.CFrame * CFrame.new(xOffset, sailY, 0)
+	stripe.Parent = ship
+
+	if withFlag then
+		local mastTop = hull.CFrame * CFrame.new(xOffset, hull.Size.Y / 2 + height, 0)
+		local flag = Instance.new("WedgePart")
+		flag.Name = "Flag"
+		flag.Size = Vector3.new(0.2, 2.5, 4)
+		flag.Color = shipType.HullColor
+		flag.Material = Enum.Material.Fabric
+		flag.Anchored = true
+		flag.CanCollide = false
+		flag.CFrame = mastTop * CFrame.new(0, -1, 2) * CFrame.Angles(0, math.rad(90), 0)
+		flag.Parent = ship
+	end
+end
+
+local function addMasts(ship, hull, shipType)
+	local mastCount = shipType.MastCount or 1
+	local mastHeight = 18 + hull.Size.X * 0.15
+
+	if mastCount == 1 then
+		addMast(ship, hull, shipType, 2, mastHeight, true)
+		return
+	end
+
+	-- Spread masts along the hull's length, evenly, main mast (tallest,
+	-- flagged) roughly amidships and the rest slightly shorter.
+	local spread = hull.Size.X * 0.55
+	for i = 1, mastCount do
+		local t = (i - 1) / (mastCount - 1) -- 0..1 from stern to bow
+		local xOffset = -spread / 2 + t * spread
+		local isMain = i == math.ceil(mastCount / 2)
+		addMast(ship, hull, shipType, xOffset, isMain and mastHeight or mastHeight * 0.8, isMain)
+	end
+end
+
+local function addPortholes(ship, hull)
+	local count = math.clamp(math.floor(hull.Size.X / 8), 3, 6)
+	for i = 1, count do
+		local t = (i - 0.5) / count
+		local xOffset = -hull.Size.X * 0.4 + t * hull.Size.X * 0.8
+
+		for _, side in ipairs({ -1, 1 }) do
+			local porthole = Instance.new("Part")
+			porthole.Name = "Porthole"
+			porthole.Shape = Enum.PartType.Cylinder
+			porthole.Size = Vector3.new(0.3, 1, 1)
+			porthole.Color = Color3.fromRGB(20, 20, 25)
+			porthole.Material = Enum.Material.Metal
+			porthole.Anchored = true
+			porthole.CanCollide = false
+			porthole.CFrame = hull.CFrame * CFrame.new(xOffset, 0, side * (hull.Size.Z / 2 + 0.15)) * CFrame.Angles(0, math.rad(90), 0)
+			porthole.Parent = ship
+		end
+	end
+end
+
+-- Decorative cannon barrels sticking out both sides of the hull, purely
+-- visual (the actual firing logic lives in ShipCannons.server.lua).
+local function addCannonBarrels(ship, hull)
+	for _, side in ipairs({ -1, 1 }) do
+		local barrel = Instance.new("Part")
+		barrel.Name = "CannonBarrel"
+		barrel.Shape = Enum.PartType.Cylinder
+		barrel.Size = Vector3.new(3, 0.8, 0.8)
+		barrel.Color = Color3.fromRGB(35, 35, 38)
+		barrel.Material = Enum.Material.Metal
+		barrel.Anchored = true
+		barrel.CanCollide = false
+		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, 0, math.rad(90))
+		barrel.Parent = ship
+	end
+end
+
+-- A trailing foam/wake ParticleEmitter at the bow, riding along with the
+-- ship (it's a descendant of `ship`, so ShipMovement's Model:PivotTo moves
+-- it along with everything else).
+local function addWakeTrail(ship, hull)
+	local wakeHolder = Instance.new("Part")
+	wakeHolder.Name = "WakeEmitter"
+	wakeHolder.Size = Vector3.new(0.2, 0.2, 0.2)
+	wakeHolder.Transparency = 1
+	wakeHolder.Anchored = true
+	wakeHolder.CanCollide = false
+	wakeHolder.CanQuery = false
+	wakeHolder.CFrame = hull.CFrame * CFrame.new(hull.Size.X / 2, -hull.Size.Y / 2 + 1, 0)
+	wakeHolder.Parent = ship
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(1, 3),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.4),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Lifetime = NumberRange.new(1.5, 2.5)
+	emitter.Rate = 15
+	emitter.Speed = NumberRange.new(1, 2)
+	emitter.SpreadAngle = Vector2.new(30, 10)
+	emitter.Parent = wakeHolder
+end
+
+local function addAllDecorations(ship, hull, shipType)
+	local ok, err = pcall(function()
+		addBow(ship, hull, shipType)
+		addRailingsAndBowsprit(ship, hull)
+		addMasts(ship, hull, shipType)
+		addPortholes(ship, hull)
+		addWakeTrail(ship, hull)
+		if shipType.HasCannon then
+			addCannonBarrels(ship, hull)
+		end
+	end)
+	if not ok then
+		warn("ShipSpawner: decoration failed for a " .. shipType.Name .. " — " .. tostring(err))
+	end
 end
 
 local function spawnShip()
@@ -1748,21 +2241,17 @@ local function spawnShip()
 	cabin.Material = Enum.Material.Wood
 	cabin.Parent = ship
 
-	local mast = Instance.new("Part")
-	mast.Name = "Mast"
-	mast.Shape = Enum.PartType.Cylinder
-	mast.Size = Vector3.new(18, 1, 1)
-	mast.CFrame = hull.CFrame * CFrame.new(2, 9, 0) * CFrame.Angles(0, 0, math.rad(90))
-	mast.Anchored = true
-	mast.CanCollide = false
-	mast.Color = Color3.fromRGB(70, 50, 35)
-	mast.Parent = ship
+	local upperCabin = Instance.new("Part")
+	upperCabin.Name = "UpperCabin"
+	upperCabin.Size = Vector3.new(4.5, 3, 4.5)
+	upperCabin.CFrame = hull.CFrame * CFrame.new(-hull.Size.X / 4, 8, 0)
+	upperCabin.Anchored = true
+	upperCabin.CanCollide = false
+	upperCabin.Color = shipType.CabinColor
+	upperCabin.Material = Enum.Material.Wood
+	upperCabin.Parent = ship
 
-	addShipDetails(ship, hull, shipType)
-
-	if shipType.HasCannon then
-		addCannonBarrels(ship, hull)
-	end
+	addAllDecorations(ship, hull, shipType)
 
 	local humanCount = math.random(shipType.HumansMin, shipType.HumansMax)
 	for _ = 1, humanCount do
@@ -1805,7 +2294,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX20">
+		<Item class="Script" referent="RBX21">
 			<Properties>
 				<string name="Name">ShopHandler</string>
 				<ProtectedString name="Source"><![CDATA[-- Server side of both shops:
@@ -1878,7 +2367,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX21">
+		<Item class="Script" referent="RBX22">
 			<Properties>
 				<string name="Name">SkySpawn</string>
 				<ProtectedString name="Source"><![CDATA[-- Every player (re)spawns on an invisible, walkable platform high above the
@@ -1986,7 +2475,7 @@ Workspace:SetAttribute("SkySpawnGenerated", true)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX22">
+		<Item class="Script" referent="RBX23">
 			<Properties>
 				<string name="Name">WorldSetup</string>
 				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor
@@ -2059,31 +2548,86 @@ if not Workspace:GetAttribute("WaterWorldGenerated") then
 
 	Workspace:SetAttribute("WaterWorldGenerated", true)
 end
-
-Workspace.FallenPartsDestroyHeight = Config.WaterCenter.Y - Config.WaterSize.Y
 ]]></ProtectedString>
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX23">
+	<Item class="StarterPlayer" referent="RBX24">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX24">
+		<Item class="StarterPlayerScripts" referent="RBX25">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX25">
+			<Item class="LocalScript" referent="RBX26">
+				<Properties>
+					<string name="Name">AttackController</string>
+					<ProtectedString name="Source"><![CDATA[-- Attack input: press F to attack. The server (PlayerCombat.server.lua)
+-- decides everything — which attack, cooldown, who it hits, damage — this
+-- script only sends the request and plays a simple visual effect
+-- (an expanding ring) wherever the server says an attack happened.
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local AttackEvent = Remotes:WaitForChild("Attack")
+local AttackFXEvent = Remotes:WaitForChild("AttackFX")
+
+local ATTACK_KEY = Enum.KeyCode.F
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+	if gameProcessedEvent then
+		return
+	end
+	if input.KeyCode == ATTACK_KEY then
+		AttackEvent:FireServer()
+	end
+end)
+
+AttackFXEvent.OnClientEvent:Connect(function(position, radius, color)
+	local ring = Instance.new("Part")
+	ring.Name = "AttackFX"
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.Material = Enum.Material.Neon
+	ring.Color = color
+	ring.Transparency = 0.3
+	ring.Size = Vector3.new(0.2, 1, 1)
+	ring.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Parent = workspace
+
+	local tween = TweenService:Create(ring, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
+		Size = Vector3.new(0.2, radius * 2, radius * 2),
+		Transparency = 1,
+	})
+	tween:Play()
+	Debris:AddItem(ring, 0.5)
+end)
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="LocalScript" referent="RBX27">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
 -- local player's creature destroys a raft. Roblox's built-in leaderstats
 -- panel already shows Level/Money/XP in the player list, so this just adds
--- the transient feedback.
+-- the transient feedback, plus a health bar and current-attack name (PvP
+-- damage matters now, and evolving swaps your attack).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
 
 local player = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
@@ -2093,6 +2637,75 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CreatureHud"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Health bar + current attack name (bottom-left), tracking whichever
+-- character is currently alive.
+local statusFrame = Instance.new("Frame")
+statusFrame.Size = UDim2.new(0, 220, 0, 50)
+statusFrame.Position = UDim2.new(0, 20, 1, -70)
+statusFrame.BackgroundTransparency = 1
+statusFrame.Parent = screenGui
+
+local healthBack = Instance.new("Frame")
+healthBack.Size = UDim2.new(1, 0, 0, 16)
+healthBack.Position = UDim2.new(0, 0, 0, 0)
+healthBack.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+healthBack.BorderSizePixel = 0
+healthBack.Parent = statusFrame
+Instance.new("UICorner", healthBack).CornerRadius = UDim.new(0, 6)
+
+local healthFill = Instance.new("Frame")
+healthFill.Name = "Fill"
+healthFill.Size = UDim2.new(1, 0, 1, 0)
+healthFill.BackgroundColor3 = Color3.fromRGB(80, 220, 100)
+healthFill.BorderSizePixel = 0
+healthFill.Parent = healthBack
+Instance.new("UICorner", healthFill).CornerRadius = UDim.new(0, 6)
+
+local attackLabel = Instance.new("TextLabel")
+attackLabel.Size = UDim2.new(1, 0, 0, 24)
+attackLabel.Position = UDim2.new(0, 0, 0, 20)
+attackLabel.BackgroundTransparency = 1
+attackLabel.Font = Enum.Font.GothamBold
+attackLabel.TextSize = 15
+attackLabel.TextXAlignment = Enum.TextXAlignment.Left
+attackLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+attackLabel.TextStrokeTransparency = 0.4
+attackLabel.Text = ""
+attackLabel.Parent = statusFrame
+
+local function bindToCharacter(character)
+	local humanoid = character:WaitForChild("Humanoid")
+
+	local function refreshHealth()
+		local ratio = humanoid.MaxHealth > 0 and math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1) or 0
+		healthFill.Size = UDim2.new(ratio, 0, 1, 0)
+		healthFill.BackgroundColor3 = ratio > 0.5 and Color3.fromRGB(80, 220, 100)
+			or ratio > 0.25 and Color3.fromRGB(230, 200, 60)
+			or Color3.fromRGB(220, 70, 70)
+	end
+
+	humanoid.HealthChanged:Connect(refreshHealth)
+	humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(refreshHealth)
+	refreshHealth()
+end
+
+local leaderstats = player:WaitForChild("leaderstats")
+local evolutionValue = leaderstats:WaitForChild("Evolution")
+
+local function refreshAttackLabel()
+	local tierIndex = math.clamp(evolutionValue.Value + 1, 1, #Config.EvolutionTiers)
+	local tier = Config.EvolutionTiers[tierIndex]
+	attackLabel.Text = "Attack (F): " .. tier.Attack.Name
+end
+
+evolutionValue:GetPropertyChangedSignal("Value"):Connect(refreshAttackLabel)
+refreshAttackLabel()
+
+if player.Character then
+	bindToCharacter(player.Character)
+end
+player.CharacterAdded:Connect(bindToCharacter)
 
 local label = Instance.new("TextLabel")
 label.Size = UDim2.new(0, 500, 0, 40)
@@ -2153,7 +2766,7 @@ refreshDepthChargeLabel()
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX26">
+			<Item class="LocalScript" referent="RBX28">
 				<Properties>
 					<string name="Name">UpgradeShop</string>
 					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with two tabs:

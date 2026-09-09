@@ -43,6 +43,29 @@ Each evolution keeps your Money and all shop upgrade tiers — only Level and
 XP reset, and each tier's base speed/size is higher than the last, so it's
 a "prestige," not a punishment.
 
+## PvP: evolution-based attacks
+
+Press **F** to attack. Every evolution tier grants a different attack, and
+evolving swaps yours immediately — `PlayerCombat.server.lua` always reads
+your *current* tier live, there's no separate "equip" step:
+
+| Tier | Attack | Type | Range | Damage | Cooldown |
+|---|---|---|---|---|---|
+| Minnow | Nibble | melee (80° cone) | 8 | 8 | 1.2s |
+| Barracuda | Lunge Strike | dash + melee | 20 | 12 | 2.5s |
+| Reef Shark | Spin Bite | AOE (all around) | 12 | 14 | 2.2s |
+| Great White | Crushing Jaws | melee (60° cone) | 10 | 24 | 2.8s |
+| Megalodon | Tidal Slam | AOE | 18 | 22 | 3.5s |
+| Leviathan | Abyssal Roar | AOE | 26 | 32 | 4.5s |
+
+Fully server-authoritative (the client only requests an attack — cooldown,
+targets, and damage are all decided server-side) and damage is reduced by
+the target's **Scales** upgrade / Golden Scales, same as ship combat. An
+expanding colored ring shows where an attack landed. The sky spawn platform
+is a safe zone — nothing up there can attack or be attacked, so you can't
+get spawn-killed before reaching the portal. Your own health bar (and
+current attack name) show bottom-left.
+
 ## Targets: rafts vs. ships
 
 - **Rafts** — small, one touch destroys them, carry 2–6 humans. Safe,
@@ -60,17 +83,25 @@ a "prestige," not a punishment.
   cooldown) — visible cannon barrels stick out both sides of their hull.
   Upgrading **Bite Power** lowers how many hits a ship takes to sink;
   **Scales** cuts damage from both ramming and cannon fire.
-  - All three types now also have a flag, deck railings, and a bowsprit for
-    a more detailed silhouette, and slowly patrol in a small circle around
-    where they spawned (`ShipMovement.server.lua`) instead of sitting still
-    — `Model:PivotTo()` moves the whole ship (hull, cabin, mast, cannons,
-    humans, health bar) as one rigid group each tick, no physics needed.
+  - All three types have a pointed bow, a two-level cabin, deck railings, a
+    bowsprit, portholes, and 1–3 masts with square sails (Sloop 1, Frigate 2,
+    Galleon 3) each flying a flag on the main mast — plus a foam wake trail
+    at the bow. They slowly patrol in a small circle around where they
+    spawned (`ShipMovement.server.lua`) instead of sitting still —
+    `Model:PivotTo()` moves the whole ship (hull, cabin, masts, cannons,
+    humans, health bar, wake) as one rigid group each tick, no physics
+    needed. Every decoration is built in one pcall-wrapped pass, so a
+    mistake in any single piece can't stop a ship from spawning with its
+    working hitbox/health/humans intact.
 
 ## The world
 
-- **Corals** — ~150 decorative coral clusters (branch coral, brain coral,
-  sea rods) scattered across the seabed, non-collidable so they never block
-  swimming (`CoralGarden.server.lua`).
+- **Corals** — ~150 small decorative clusters (branch coral, brain coral,
+  sea rods) plus 15 big centerpiece formations (coral towers, fan corals,
+  giant clams with a glowing pearl) scattered across the seabed, all
+  non-collidable so they never block swimming (`CoralGarden.server.lua`).
+- **Islands** — 6 small rock/sand/grass islands ringing the outer play area
+  (`GraphicsPolish.server.lua`).
 - **Map barrier** — a hollow sand wall filled right at the edge of the water
   block (`WorldSetup.server.lua`), so you can't swim past the play area.
 
@@ -170,6 +201,9 @@ professional art team.
   Charge consumption, sinking + payout
 - `src/ServerScriptService/ShipCannons.server.lua` — short-range cannon fire
   from Frigates/Galleons at the nearest player
+- `src/ServerScriptService/PlayerCombat.server.lua` — PvP: validates attack
+  requests, reads the attacker's current evolution tier live, applies
+  damage to targets in range
 - `src/ServerScriptService/Modules/PlayerProgress.lua` — leaderstats
   (`Level`, `Money`, `XP`, `Evolution`), leveling + evolution math, applying
   combined stats to the character
@@ -184,7 +218,10 @@ professional art team.
 - `src/ServerScriptService/GameManager.server.lua` — wires player join/leave
   and character respawn into all of the above
 - `src/StarterPlayer/StarterPlayerScripts/CreatureHud.client.lua` — pop-up
-  feedback, evolution banner, Depth Charge counter
+  feedback, evolution banner, Depth Charge counter, health bar, current
+  attack name
+- `src/StarterPlayer/StarterPlayerScripts/AttackController.client.lua` —
+  attack input (F key) and the expanding-ring attack visual effect
 - `src/StarterPlayer/StarterPlayerScripts/UpgradeShop.client.lua` — the
   two-tab shop panel UI
 
@@ -244,9 +281,13 @@ All gameplay tuning lives in `GameConfig.lua`:
 | `Config.XPForLevel(level)` | the XP curve between levels |
 | `Config.Upgrades` (6 entries) | shop tier count, cost curve, per-tier effect |
 | `Config.RobuxProducts` | the Robux shop catalog and each power's effect |
-| `CoralCount` | how many decorative coral clusters to scatter |
+| `CoralCount`, `GiantCoralCount` | how many small/big decorative coral pieces to scatter |
+| `IslandCount` | how many small islands ring the play area |
 | `BarrierThickness`, `BarrierHeight` | the sand wall around the play area |
 | `SkySpawnHeight`, `SkySpawnPlatformSize`, `SkySpawnPortalOffset` | the sky spawn platform + portal |
+| `EvolutionTiers[i].Attack` | each tier's attack — type, range, damage, cooldown |
+| `PvPSafeZoneY` | how high up the sky-spawn safe zone extends |
+| `ShipTypes[i].MastCount`, `.SailColor` | how many masts/sails each ship type gets |
 
 ## Notes
 
@@ -261,3 +302,11 @@ All gameplay tuning lives in `GameConfig.lua`:
   set it there once, in Studio, on the published place.
 - The map barrier is a square sand frame matching the water block's own
   footprint (not a circle), so there are no corner gaps to sneak through.
+- `Workspace.FallenPartsDestroyHeight` isn't set anymore — writing it threw
+  "lacking capability Plugin" (current Roblox security model restricts that
+  property to Plugin-level code, not regular Scripts). It was only ever a
+  minor debris-cleanup safety net; the sand barrier already keeps players
+  contained, so nothing depended on it.
+- There's no split-damage credit in PvP either (same as ship kills) — this
+  is a free-for-all, no teams, so anyone can attack anyone once past the
+  sky-spawn safe zone.
