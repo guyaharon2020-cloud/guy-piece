@@ -7,22 +7,27 @@ as readable Lua source instead of a binary `.rbxl` file.
 
 ## Getting it into Roblox Studio
 
-1. Install [Rojo](https://rojo.space/docs/v7/getting-started/installation/)
-   (the VS Code extension is the easiest path, or `aftman`/`foreman` for the
-   CLI + the matching Studio plugin).
-2. From this folder, run:
-   ```bash
-   rojo serve
-   ```
-3. In Roblox Studio, open the Rojo plugin and click **Connect**. It will
-   build the DataModel described in `default.project.json` from `src/`.
-4. In Studio, go to **Game Settings → Security** and enable **Studio Access
-   to API Services** — the game uses `DataStoreService` to save profiles,
-   which is off by default in Studio.
-5. Press **Play**.
+**Quickest path:** open `BuildAWeirdPet.rbxlx` directly in Roblox Studio
+(double-click it, or File → Open in Studio). It's a prebuilt place file with
+every script already in place — no extra tooling required. If you edit the
+Lua source under `src/`, regenerate it with the same tree-walking approach
+`rojo build -o BuildAWeirdPet.rbxlx` would use (or install Rojo — see below
+— and run that command yourself).
 
-If you'd rather not install Rojo, `rojo build -o BuildAWeirdPet.rbxlx` from
-this folder produces an XML place file you can open directly in Studio.
+Either way, once it's open in Studio:
+1. Go to **Game Settings → Security** and enable **Studio Access to API
+   Services** — the game uses `DataStoreService` to save profiles, which is
+   off by default in Studio.
+2. Press **Play**.
+
+**Source-of-truth path (for ongoing development):** install
+[Rojo](https://rojo.space/docs/v7/getting-started/installation/) (the VS
+Code extension is the easiest path, or `aftman`/`foreman` for the CLI + the
+matching Studio plugin), run `rojo serve` from this folder, then connect to
+it from the Rojo plugin in Studio. This live-syncs `src/` into the DataModel
+described by `default.project.json`, so edits in your editor show up in
+Studio immediately — better for iterating than re-opening the `.rbxlx` each
+time.
 
 ## How a session actually plays
 
