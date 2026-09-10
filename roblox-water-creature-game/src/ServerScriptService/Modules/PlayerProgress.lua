@@ -8,6 +8,7 @@ local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerUpgrades = require(script.Parent.PlayerUpgrades)
 local RobuxShop = require(script.Parent.RobuxShop)
 local CreatureAppearance = require(script.Parent.CreatureAppearance)
+local PlayerSpecies = require(script.Parent.PlayerSpecies)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -75,10 +76,10 @@ function PlayerProgress.ApplyLevelStats(player)
 	end
 
 	local level = leaderstats.Level.Value
-	local tier = Config.EvolutionTiers[math.clamp(leaderstats.Evolution.Value + 1, 1, #Config.EvolutionTiers)]
+	local progression = Config.TierProgression[math.clamp(leaderstats.Evolution.Value + 1, 1, #Config.TierProgression)]
 
 	local levelSpeedBonus = (level - 1) * Config.WalkSpeedPerLevel
-	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + tier.SpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + progression.SpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
 
 	local previousMaxHealth = humanoid.MaxHealth
 	local newMaxHealth = 100 + PlayerUpgrades.GetExtraMaxHealth(player)
@@ -135,7 +136,8 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 			levelValue.Value = 1
 			xpValue.Value = 0
 			evolved = true
-			evolutionName = Config.EvolutionTiers[evolutionValue.Value + 1].Name
+			local species = Config.Species[PlayerSpecies.GetSelected(player)]
+			evolutionName = species.Tiers[evolutionValue.Value + 1].Name
 		else
 			levelValue.Value = math.min(nextLevel, Config.MaxLevel)
 		end

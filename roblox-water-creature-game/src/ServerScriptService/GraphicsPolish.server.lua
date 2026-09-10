@@ -75,6 +75,42 @@ safely("islands", function()
 	end
 end)
 
+-- The map barrier (see WorldSetup.server.lua) is a flat sand wall by
+-- default — functional but visually dull. Scatters jagged rock bumps along
+-- its inner face, centered right on the wall so each one pokes half into
+-- the play area, at varied heights and sizes, breaking up the flat
+-- silhouette into something more like a rocky coastline.
+safely("barrier detail", function()
+	local terrain = Workspace.Terrain
+	local halfX = Config.WaterSize.X / 2
+	local halfZ = Config.WaterSize.Z / 2
+
+	local bumpCount = 50
+	for _ = 1, bumpCount do
+		local side = math.random(1, 4)
+		local alongFraction = math.random()
+		local x, z
+
+		if side == 1 then
+			x = Config.WaterCenter.X + (alongFraction - 0.5) * halfX * 2
+			z = Config.WaterCenter.Z + halfZ
+		elseif side == 2 then
+			x = Config.WaterCenter.X + (alongFraction - 0.5) * halfX * 2
+			z = Config.WaterCenter.Z - halfZ
+		elseif side == 3 then
+			x = Config.WaterCenter.X + halfX
+			z = Config.WaterCenter.Z + (alongFraction - 0.5) * halfZ * 2
+		else
+			x = Config.WaterCenter.X - halfX
+			z = Config.WaterCenter.Z + (alongFraction - 0.5) * halfZ * 2
+		end
+
+		local radius = math.random(8, 22)
+		local y = Config.WaterCenter.Y + math.random(-20, 30)
+		terrain:FillBall(Vector3.new(x, y, z), radius, Enum.Material.Rock)
+	end
+end)
+
 safely("underwater bubbles", function()
 	local holder = Instance.new("Part")
 	holder.Name = "BubbleField"

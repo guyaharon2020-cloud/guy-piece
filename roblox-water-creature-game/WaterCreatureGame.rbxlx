@@ -39,10 +39,15 @@ Config.GiantCoralCount = 15 -- big centerpiece formations (towers/fans/clams)
 -- Small islands ringing the outer play area, purely decorative.
 Config.IslandCount = 6
 
--- The sky spawn platform + portal every player (re)spawns on.
+-- The sky spawn platform + portal every player (re)spawns on, enclosed in
+-- a glass cube. The floor is the invisible walkable platform (see-through
+-- to the ocean below); the 4 walls + ceiling are translucent glass so the
+-- space still reads as open while being clearly bounded.
 Config.SkySpawnHeight = 250 -- studs above the water surface
 Config.SkySpawnPlatformSize = Vector3.new(40, 2, 40)
-Config.SkySpawnPortalOffset = 16 -- studs from the platform center
+Config.SkySpawnCubeHeight = 30 -- interior height of the glass cube
+Config.SkySpawnPortalOffset = 12 -- studs from the platform center, inside the cube
+Config.SkySpawnPortalRadius = 7
 
 -- Ship patrol movement: slow drift in a small circle around each ship's
 -- spawn point.
@@ -74,61 +79,100 @@ function Config.XPForLevel(level)
 end
 
 -- Evolution: every LevelsPerEvolution levels, the creature evolves into the
--- next tier (new color/fins/base stats) and Level + XP reset to 1/0 so you
--- level up again within the new tier. Money and shop upgrades are NOT reset.
+-- next tier (new color/fins/body/base stats) and Level + XP reset to 1/0 so
+-- you level up again within the new tier. Money and shop upgrades are NOT
+-- reset. Your evolution TIER NUMBER is shared across every species — only
+-- the look (and which species you picked) changes what tier N actually
+-- renders as; switching species never resets your Level/XP/Evolution.
 Config.LevelsPerEvolution = 12
+Config.MaxEvolutionTier = 5 -- 0-indexed (tier 0 = the starting form)
 
--- Each tier's Attack is what pressing the attack key (see AttackController
--- / PlayerCombat) does — evolving swaps it immediately, since PlayerCombat
--- always reads the attacker's CURRENT Evolution tier live, never a cached
--- value.
+-- Per-tier stats and attack, shared by every species so switching species
+-- is a pure reskin, not a rebalance. Attack is what pressing the attack key
+-- (see AttackController / PlayerCombat) does — evolving swaps it
+-- immediately, since PlayerCombat always reads the attacker's CURRENT
+-- Evolution tier live, never a cached value.
 --   Type = "melee"    single target in front, within Range and ConeAngle
 --   Type = "dash"     lunge forward (DashSpeed) + melee hit during the dash
 --   Type = "aoe"      damages every other player within Range, all around
---
--- Each tier's Body is a distinct fish-shaped model (see
--- CreatureAppearance.lua) — Length/Width/Height/SnoutLength in studs before
--- the level/evolution size multiplier is applied on top. HasTeeth/HasSpikes
--- add small extra features on top of the base shape.
-Config.EvolutionTiers = {
-	{
-		Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150),
-		FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0,
-		Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 },
-		Attack = { Name = "Nibble", Type = "melee", Range = 8, ConeAngle = 80, Damage = 8, Cooldown = 1.2 },
+Config.TierProgression = {
+	{ SpeedBonus = 0, SizeBonus = 0, Attack = { Name = "Nibble", Type = "melee", Range = 8, ConeAngle = 80, Damage = 8, Cooldown = 1.2 } },
+	{ SpeedBonus = 10, SizeBonus = 0.15, Attack = { Name = "Lunge Strike", Type = "dash", Range = 20, ConeAngle = 50, DashSpeed = 90, Damage = 12, Cooldown = 2.5 } },
+	{ SpeedBonus = 20, SizeBonus = 0.3, Attack = { Name = "Spin Bite", Type = "aoe", Range = 12, Damage = 14, Cooldown = 2.2 } },
+	{ SpeedBonus = 32, SizeBonus = 0.5, Attack = { Name = "Crushing Jaws", Type = "melee", Range = 10, ConeAngle = 60, Damage = 24, Cooldown = 2.8 } },
+	{ SpeedBonus = 46, SizeBonus = 0.8, Attack = { Name = "Tidal Slam", Type = "aoe", Range = 18, Damage = 22, Cooldown = 3.5 } },
+	{ SpeedBonus = 65, SizeBonus = 1.2, Attack = { Name = "Abyssal Roar", Type = "aoe", Range = 26, Damage = 32, Cooldown = 4.5 } },
+}
+
+-- Species: each has its own 6-tier look (Color/FinColor/FinScale/Body) built
+-- by CreatureAppearance.lua according to BodyStyle:
+--   "streamlined"  elongated body + pointed snout + forked tail (Fish, Dolphin)
+--   "serpentine"   upright curled body + long snout + coiled tail (Sea Horse)
+-- ShopCost = 0 means it's a free starter, choosable at the portal
+-- (SkySpawn.server.lua). ShopCost > 0 means it must be bought first (see
+-- PlayerSpecies.lua / the shop's Creatures tab) before it can be selected.
+Config.Species = {
+	Fish = {
+		Name = "Fish",
+		ShopCost = 0,
+		BodyStyle = "streamlined",
+		Tiers = {
+			{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
+				Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 } },
+			{ Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140), FinScale = 1.15,
+				Body = { Length = 5.5, Width = 1.1, Height = 1.0, SnoutLength = 1.3 } },
+			{ Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78), FinScale = 1.3,
+				Body = { Length = 6, Width = 1.7, Height = 1.5, SnoutLength = 1.2 } },
+			{ Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90), FinScale = 1.5,
+				Body = { Length = 7.5, Width = 2.1, Height = 1.9, SnoutLength = 1.5 } },
+			{ Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28), FinScale = 1.8,
+				Body = { Length = 9.5, Width = 2.6, Height = 2.3, SnoutLength = 1.8, HasTeeth = true } },
+			{ Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200), FinScale = 2.2,
+				Body = { Length = 11.5, Width = 3.1, Height = 2.7, SnoutLength = 2.1, HasTeeth = true, HasSpikes = true } },
+		},
 	},
-	{
-		Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140),
-		FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15,
-		Body = { Length = 5.5, Width = 1.1, Height = 1.0, SnoutLength = 1.3 },
-		Attack = { Name = "Lunge Strike", Type = "dash", Range = 20, ConeAngle = 50, DashSpeed = 90, Damage = 12, Cooldown = 2.5 },
+	SeaHorse = {
+		Name = "Sea Horse",
+		ShopCost = 0,
+		BodyStyle = "serpentine",
+		Tiers = {
+			{ Name = "Hatchling Seahorse", Color = Color3.fromRGB(230, 210, 140), FinColor = Color3.fromRGB(200, 170, 100), FinScale = 1.0,
+				Body = { Height = 2.2, Width = 0.7, SnoutLength = 0.6, TailSegments = 3 } },
+			{ Name = "Common Seahorse", Color = Color3.fromRGB(210, 150, 80), FinColor = Color3.fromRGB(180, 120, 60), FinScale = 1.1,
+				Body = { Height = 3.2, Width = 0.85, SnoutLength = 0.9, TailSegments = 4 } },
+			{ Name = "Spiny Seahorse", Color = Color3.fromRGB(140, 90, 160), FinColor = Color3.fromRGB(110, 60, 130), FinScale = 1.2,
+				Body = { Height = 4, Width = 1.0, SnoutLength = 1.1, TailSegments = 4, HasSpines = true } },
+			{ Name = "Pygmy Dragon", Color = Color3.fromRGB(90, 170, 110), FinColor = Color3.fromRGB(60, 140, 80), FinScale = 1.35,
+				Body = { Height = 4.8, Width = 1.2, SnoutLength = 1.3, TailSegments = 5, HasSpines = true } },
+			{ Name = "Weedy Seadragon", Color = Color3.fromRGB(180, 140, 60), FinColor = Color3.fromRGB(140, 100, 40), FinScale = 1.55,
+				Body = { Height = 5.8, Width = 1.4, SnoutLength = 1.6, TailSegments = 5, HasSpines = true } },
+			{ Name = "Kraken Seahorse", Color = Color3.fromRGB(40, 200, 190), FinColor = Color3.fromRGB(20, 255, 230), FinScale = 1.8,
+				Body = { Height = 7, Width = 1.7, SnoutLength = 1.9, TailSegments = 6, HasSpines = true } },
+		},
 	},
-	{
-		Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78),
-		FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3,
-		Body = { Length = 6, Width = 1.7, Height = 1.5, SnoutLength = 1.2 },
-		Attack = { Name = "Spin Bite", Type = "aoe", Range = 12, Damage = 14, Cooldown = 2.2 },
-	},
-	{
-		Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90),
-		FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5,
-		Body = { Length = 7.5, Width = 2.1, Height = 1.9, SnoutLength = 1.5 },
-		Attack = { Name = "Crushing Jaws", Type = "melee", Range = 10, ConeAngle = 60, Damage = 24, Cooldown = 2.8 },
-	},
-	{
-		Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28),
-		FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8,
-		Body = { Length = 9.5, Width = 2.6, Height = 2.3, SnoutLength = 1.8, HasTeeth = true },
-		Attack = { Name = "Tidal Slam", Type = "aoe", Range = 18, Damage = 22, Cooldown = 3.5 },
-	},
-	{
-		Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200),
-		FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2,
-		Body = { Length = 11.5, Width = 3.1, Height = 2.7, SnoutLength = 2.1, HasTeeth = true, HasSpikes = true },
-		Attack = { Name = "Abyssal Roar", Type = "aoe", Range = 26, Damage = 32, Cooldown = 4.5 },
+	Dolphin = {
+		Name = "Dolphin",
+		ShopCost = 600,
+		BodyStyle = "streamlined",
+		Tiers = {
+			{ Name = "Dolphin Calf", Color = Color3.fromRGB(140, 160, 175), FinColor = Color3.fromRGB(110, 130, 145), FinScale = 1.0,
+				Body = { Length = 4, Width = 1.3, Height = 1.3, SnoutLength = 0.9 } },
+			{ Name = "Bottlenose", Color = Color3.fromRGB(120, 145, 165), FinColor = Color3.fromRGB(90, 115, 135), FinScale = 1.2,
+				Body = { Length = 6, Width = 1.6, Height = 1.6, SnoutLength = 1.3 } },
+			{ Name = "Spinner Dolphin", Color = Color3.fromRGB(100, 130, 155), FinColor = Color3.fromRGB(75, 100, 125), FinScale = 1.35,
+				Body = { Length = 7, Width = 1.8, Height = 1.8, SnoutLength = 1.4 } },
+			{ Name = "Pilot Whale", Color = Color3.fromRGB(60, 70, 80), FinColor = Color3.fromRGB(40, 48, 56), FinScale = 1.55,
+				Body = { Length = 8.5, Width = 2.3, Height = 2.2, SnoutLength = 1.5 } },
+			{ Name = "Orca", Color = Color3.fromRGB(20, 22, 26), FinColor = Color3.fromRGB(245, 245, 245), FinScale = 1.8,
+				Body = { Length = 10, Width = 2.7, Height = 2.6, SnoutLength = 1.6 } },
+			{ Name = "Ancient Orca", Color = Color3.fromRGB(15, 40, 45), FinColor = Color3.fromRGB(140, 255, 235), FinScale = 2.1,
+				Body = { Length = 12, Width = 3.2, Height = 3.0, SnoutLength = 1.8 } },
+		},
 	},
 }
-Config.MaxEvolutionTier = #Config.EvolutionTiers - 1 -- 0-indexed (tier 0 = Minnow)
+Config.SpeciesOrder = { "Fish", "SeaHorse", "Dolphin" }
+Config.StarterSpecies = { "Fish", "SeaHorse" } -- free, choosable at the portal
+Config.DefaultSpecies = "Fish"
 
 -- Players above this Y (i.e. still on/near the sky spawn platform) can
 -- neither attack nor be attacked — a simple anti-spawn-kill safe zone.
@@ -136,13 +180,13 @@ Config.PvPSafeZoneY = Config.WaterCenter.Y + Config.WaterSize.Y / 2 + 50
 
 -- Ships: several types, each with its own size/color/human count. Types with
 -- HasCannon fire on nearby players at short range (see ShipCannons).
-Config.ShipSpawnInterval = 25
-Config.MaxShips = 4
+Config.ShipSpawnInterval = 22
+Config.MaxShips = 6
 Config.ShipTypes = {
 	{
 		Key = "Sloop",
 		Name = "Sloop",
-		Weight = 50,
+		Weight = 35,
 		HullSize = Vector3.new(28, 6, 11),
 		HullColor = Color3.fromRGB(120, 85, 55),
 		CabinColor = Color3.fromRGB(150, 110, 70),
@@ -154,9 +198,23 @@ Config.ShipTypes = {
 		HasCannon = false,
 	},
 	{
+		Key = "Brigantine",
+		Name = "Brigantine",
+		Weight = 25,
+		HullSize = Vector3.new(31, 6.5, 12),
+		HullColor = Color3.fromRGB(95, 100, 70),
+		CabinColor = Color3.fromRGB(120, 125, 90),
+		SailColor = Color3.fromRGB(225, 220, 195),
+		MastCount = 2,
+		HumansMin = 10,
+		HumansMax = 15,
+		HealthBonus = 3,
+		HasCannon = false,
+	},
+	{
 		Key = "Frigate",
 		Name = "Frigate",
-		Weight = 35,
+		Weight = 22,
 		HullSize = Vector3.new(34, 7, 13),
 		HullColor = Color3.fromRGB(70, 75, 82),
 		CabinColor = Color3.fromRGB(45, 48, 55),
@@ -173,7 +231,7 @@ Config.ShipTypes = {
 	{
 		Key = "Galleon",
 		Name = "Galleon",
-		Weight = 15,
+		Weight = 12,
 		HullSize = Vector3.new(42, 8, 16),
 		HullColor = Color3.fromRGB(120, 35, 40),
 		CabinColor = Color3.fromRGB(150, 120, 40),
@@ -186,6 +244,23 @@ Config.ShipTypes = {
 		CannonDamage = 16,
 		CannonRange = 65,
 		CannonCooldown = 4,
+	},
+	{
+		Key = "ManOfWar",
+		Name = "Man-of-War",
+		Weight = 6,
+		HullSize = Vector3.new(52, 9.5, 19),
+		HullColor = Color3.fromRGB(45, 35, 30),
+		CabinColor = Color3.fromRGB(70, 55, 45),
+		SailColor = Color3.fromRGB(210, 195, 150),
+		MastCount = 3,
+		HumansMin = 26,
+		HumansMax = 36,
+		HealthBonus = 24,
+		HasCannon = true,
+		CannonDamage = 22,
+		CannonRange = 75,
+		CannonCooldown = 3.5,
 	},
 }
 
@@ -647,11 +722,13 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
 local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
+local PlayerSpecies = require(ServerScriptService.Modules.PlayerSpecies)
 
 local function onPlayerAdded(player)
 	PlayerProgress.Init(player)
 	PlayerUpgrades.Init(player)
 	RobuxShop.Init(player)
+	PlayerSpecies.Init(player)
 
 	player.CharacterAdded:Connect(function()
 		task.wait(0.5) -- let the Humanoid finish rigging before we touch it
@@ -747,6 +824,42 @@ safely("islands", function()
 	end
 end)
 
+-- The map barrier (see WorldSetup.server.lua) is a flat sand wall by
+-- default — functional but visually dull. Scatters jagged rock bumps along
+-- its inner face, centered right on the wall so each one pokes half into
+-- the play area, at varied heights and sizes, breaking up the flat
+-- silhouette into something more like a rocky coastline.
+safely("barrier detail", function()
+	local terrain = Workspace.Terrain
+	local halfX = Config.WaterSize.X / 2
+	local halfZ = Config.WaterSize.Z / 2
+
+	local bumpCount = 50
+	for _ = 1, bumpCount do
+		local side = math.random(1, 4)
+		local alongFraction = math.random()
+		local x, z
+
+		if side == 1 then
+			x = Config.WaterCenter.X + (alongFraction - 0.5) * halfX * 2
+			z = Config.WaterCenter.Z + halfZ
+		elseif side == 2 then
+			x = Config.WaterCenter.X + (alongFraction - 0.5) * halfX * 2
+			z = Config.WaterCenter.Z - halfZ
+		elseif side == 3 then
+			x = Config.WaterCenter.X + halfX
+			z = Config.WaterCenter.Z + (alongFraction - 0.5) * halfZ * 2
+		else
+			x = Config.WaterCenter.X - halfX
+			z = Config.WaterCenter.Z + (alongFraction - 0.5) * halfZ * 2
+		end
+
+		local radius = math.random(8, 22)
+		local y = Config.WaterCenter.Y + math.random(-20, 30)
+		terrain:FillBall(Vector3.new(x, y, z), radius, Enum.Material.Rock)
+	end
+end)
+
 safely("underwater bubbles", function()
 	local holder = Instance.new("Part")
 	holder.Name = "BubbleField"
@@ -787,22 +900,25 @@ Workspace:SetAttribute("GraphicsPolishApplied", true)
 			<Item class="ModuleScript" referent="RBX10">
 				<Properties>
 					<string name="Name">CreatureAppearance</string>
-					<ProtectedString name="Source"><![CDATA[-- Builds an actual fish-shaped body for the player, distinct per evolution
--- tier (see Config.EvolutionTiers[i].Body), instead of just fins bolted
--- onto the default human silhouette. Built entirely from primitive Parts —
--- no custom mesh/asset upload is needed (and none is available from here).
+					<ProtectedString name="Source"><![CDATA[-- Builds an actual creature-shaped body for the player, distinct per
+-- species (see Config.Species) and evolution tier, instead of just fins
+-- bolted onto the default human silhouette. Built entirely from primitive
+-- Parts — no custom mesh/asset upload is needed (and none is available
+-- from here).
 --
 -- How it works: the default character's own body parts (Head, Torso/arms/
 -- legs) are made fully invisible but left physically in place — they still
 -- drive movement, swimming, and collision exactly as before, nothing about
 -- gameplay changes. A separate "FishBody" model, welded to the (now
--- invisible) torso, is what's actually seen: an elongated body, a pointed
--- snout, a forked tail, dorsal/pectoral fins, eyes, and (on the bigger
--- tiers) teeth or back spikes. It's rebuilt fresh on every call, so it
--- always matches the player's current evolution tier and size.
+-- invisible) torso, is what's actually seen. Two body styles:
+--   "streamlined"  elongated body, pointed snout, forked tail (Fish, Dolphin)
+--   "serpentine"   upright body, forward snout, coronet, curled tail (Sea Horse)
+-- It's rebuilt fresh on every call, so it always matches the player's
+-- current species, evolution tier, and size.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
+local PlayerSpecies = require(script.Parent.PlayerSpecies)
 
 local CreatureAppearance = {}
 
@@ -844,20 +960,77 @@ local function attachFin(character, anchor, name, size, color, offset, material)
 	return attachPart(character, anchor, fin, offset)
 end
 
+-- Like attachFin, but joined with a Motor6D instead of a WeldConstraint.
+-- WeldConstraint bakes in a fixed relative transform and fights any script
+-- that tries to move the constrained part afterward; Motor6D is the joint
+-- type Roblox's own character animations use precisely because its C0 can
+-- be updated live, smoothly, every frame with no jitter. CreatureAnimator
+-- .client.lua finds these by name ("SwimMotor") and wiggles their C0 for a
+-- swimming tail-wag / dorsal-sway.
+local function attachAnimatedFin(character, anchor, name, size, color, offset, material)
+	local fin = Instance.new("WedgePart")
+	fin.Name = name
+	fin.Size = size
+	fin.Color = color
+	fin.Material = material
+	fin.CanCollide = false
+	fin.CanQuery = false
+	fin.Massless = true
+	fin.CFrame = anchor.CFrame * offset
+	fin.Parent = character
+
+	local motor = Instance.new("Motor6D")
+	motor.Name = "SwimMotor"
+	motor.Part0 = anchor
+	motor.Part1 = fin
+	motor.C0 = offset
+	motor:SetAttribute("BaseC0", offset)
+	motor.Parent = fin
+
+	return fin
+end
+
+local function attachEye(character, anchor, offset, folder)
+	local eyeWhite = Instance.new("Part")
+	eyeWhite.Name = "Eye"
+	eyeWhite.Shape = Enum.PartType.Ball
+	eyeWhite.Size = Vector3.new(0.5, 0.5, 0.5)
+	eyeWhite.Color = Color3.fromRGB(255, 255, 255)
+	eyeWhite.Material = Enum.Material.SmoothPlastic
+	eyeWhite.CanCollide = false
+	eyeWhite.CanQuery = false
+	eyeWhite.Massless = true
+	attachPart(character, anchor, eyeWhite, offset).Parent = folder
+
+	local pupil = Instance.new("Part")
+	pupil.Name = "Pupil"
+	pupil.Shape = Enum.PartType.Ball
+	pupil.Size = Vector3.new(0.22, 0.22, 0.22)
+	pupil.Color = Color3.fromRGB(20, 20, 20)
+	pupil.Material = Enum.Material.SmoothPlastic
+	pupil.CanCollide = false
+	pupil.CanQuery = false
+	pupil.Massless = true
+	attachPart(character, anchor, pupil, offset * CFrame.new(0, 0, -0.2)).Parent = folder
+end
+
+--============================================================
+-- "streamlined" body style: Fish, Dolphin
+--============================================================
+
 -- A pointed snout: a WedgePart's taper runs along its own local Z by
 -- default (full height at -Z, a point at +Z). Rotating 180° about Y sends
 -- that point toward world -Z — the character's forward direction — with
 -- the flat, full-height base blending back into the body.
-local function attachSnout(character, anchor, bodySpec, color)
+local function attachSnoutWedge(character, anchor, size, offset, color)
 	local snout = Instance.new("WedgePart")
 	snout.Name = "FishSnout"
-	snout.Size = Vector3.new(bodySpec.Width * 0.55, bodySpec.Height * 0.55, bodySpec.SnoutLength)
+	snout.Size = size
 	snout.Color = color
 	snout.Material = Enum.Material.SmoothPlastic
 	snout.CanCollide = false
 	snout.CanQuery = false
 	snout.Massless = true
-	local offset = CFrame.new(0, 0, -(bodySpec.Length / 2 + bodySpec.SnoutLength / 2)) * CFrame.Angles(0, math.rad(180), 0)
 	return attachPart(character, anchor, snout, offset)
 end
 
@@ -907,31 +1080,171 @@ local function attachSpikes(character, anchor, bodySpec, color, material, folder
 	end
 end
 
-local function attachEye(character, anchor, bodySpec, side, folder)
-	local eyeOffset = CFrame.new(side * bodySpec.Width * 0.32, bodySpec.Height * 0.18, -bodySpec.Length * 0.35)
+local function buildStreamlinedBody(character, torso, bodySpec, tierData, finColor, finMaterial, topColor, bellyColor, folder)
+	local L, W, H = bodySpec.Length, bodySpec.Width, bodySpec.Height
 
-	local eyeWhite = Instance.new("Part")
-	eyeWhite.Name = "Eye"
-	eyeWhite.Shape = Enum.PartType.Ball
-	eyeWhite.Size = Vector3.new(0.5, 0.5, 0.5)
-	eyeWhite.Color = Color3.fromRGB(255, 255, 255)
-	eyeWhite.Material = Enum.Material.SmoothPlastic
-	eyeWhite.CanCollide = false
-	eyeWhite.CanQuery = false
-	eyeWhite.Massless = true
-	attachPart(character, anchor, eyeWhite, eyeOffset).Parent = folder
+	local body = Instance.new("Part")
+	body.Name = "FishTorso"
+	body.Shape = Enum.PartType.Ball
+	body.Size = Vector3.new(W, H, L)
+	body.Color = topColor
+	body.Material = Enum.Material.SmoothPlastic
+	body.CanCollide = false
+	body.CanQuery = false
+	body.Massless = true
+	attachPart(character, torso, body, CFrame.new()).Parent = folder
 
-	local pupil = Instance.new("Part")
-	pupil.Name = "Pupil"
-	pupil.Shape = Enum.PartType.Ball
-	pupil.Size = Vector3.new(0.22, 0.22, 0.22)
-	pupil.Color = Color3.fromRGB(20, 20, 20)
-	pupil.Material = Enum.Material.SmoothPlastic
-	pupil.CanCollide = false
-	pupil.CanQuery = false
-	pupil.Massless = true
-	attachPart(character, anchor, pupil, eyeOffset * CFrame.new(0, 0, -0.2)).Parent = folder
+	local belly = Instance.new("Part")
+	belly.Name = "FishBelly"
+	belly.Shape = Enum.PartType.Ball
+	belly.Size = Vector3.new(W * 0.75, H * 0.55, L * 0.8)
+	belly.Color = bellyColor
+	belly.Material = Enum.Material.SmoothPlastic
+	belly.CanCollide = false
+	belly.CanQuery = false
+	belly.Massless = true
+	attachPart(character, torso, belly, CFrame.new(0, -H * 0.3, 0)).Parent = folder
+
+	local snoutSize = Vector3.new(W * 0.55, H * 0.55, bodySpec.SnoutLength)
+	local snoutOffset = CFrame.new(0, 0, -(L / 2 + bodySpec.SnoutLength / 2)) * CFrame.Angles(0, math.rad(180), 0)
+	attachSnoutWedge(character, torso, snoutSize, snoutOffset, topColor).Parent = folder
+
+	if bodySpec.HasTeeth then
+		attachTeeth(character, torso, bodySpec, folder)
+	end
+	if bodySpec.HasSpikes then
+		attachSpikes(character, torso, bodySpec, finColor, finMaterial, folder)
+	end
+
+	local s = tierData.FinScale
+	attachAnimatedFin(character, torso, "TailFinUp", Vector3.new(0.4, H * 0.9 * s, L * 0.35 * s), finColor,
+		CFrame.new(0, H * 0.15, L / 2 + L * 0.15) * CFrame.Angles(0, math.rad(180), math.rad(24)), finMaterial).Parent = folder
+	attachAnimatedFin(character, torso, "TailFinDown", Vector3.new(0.4, H * 0.9 * s, L * 0.35 * s), finColor,
+		CFrame.new(0, -H * 0.4, L / 2 + L * 0.15) * CFrame.Angles(0, math.rad(180), math.rad(-24)), finMaterial).Parent = folder
+	attachFin(character, torso, "DorsalFin", Vector3.new(0.4, H * 0.9 * s, H * 0.9 * s), finColor,
+		CFrame.new(0, H * 0.5, L * 0.05) * CFrame.Angles(0, 0, math.rad(90)), finMaterial).Parent = folder
+	attachFin(character, torso, "LeftFin", Vector3.new(W * 0.9 * s, 0.3, L * 0.3 * s), finColor,
+		CFrame.new(-W / 2, -H * 0.1, -L * 0.1) * CFrame.Angles(0, 0, math.rad(20)), finMaterial).Parent = folder
+	attachFin(character, torso, "RightFin", Vector3.new(W * 0.9 * s, 0.3, L * 0.3 * s), finColor,
+		CFrame.new(W / 2, -H * 0.1, -L * 0.1) * CFrame.Angles(0, 0, math.rad(-20)), finMaterial).Parent = folder
+
+	attachEye(character, torso, CFrame.new(-W * 0.32, H * 0.18, -L * 0.35), folder)
+	attachEye(character, torso, CFrame.new(W * 0.32, H * 0.18, -L * 0.35), folder)
 end
+
+--============================================================
+-- "serpentine" body style: Sea Horse
+--============================================================
+
+-- A chain of tapering cylinder segments curling from under the body: each
+-- segment's center is placed at the midpoint of its own span (so a 90°
+-- roll to align the cylinder's length with that span is direction-agnostic
+-- — same trick as the coral tower trunk / ship masts), and `cursor`
+-- accumulates a pitch rotation each step so the chain curls backward/under
+-- as it descends.
+local function attachCurledTail(character, anchor, bodySpec, color, material, folder)
+	local segments = bodySpec.TailSegments or 4
+	local segLength = bodySpec.Height * 0.22
+	local curlPerSegment = math.rad(28)
+
+	local cursor = CFrame.new(0, -bodySpec.Height / 2, bodySpec.Width * 0.25)
+
+	for i = 1, segments do
+		cursor = cursor * CFrame.Angles(curlPerSegment, 0, 0)
+
+		local radius = bodySpec.Width * 0.5 * (1 - (i - 1) / (segments + 1))
+		local segment = Instance.new("Part")
+		segment.Name = "TailSegment"
+		segment.Shape = Enum.PartType.Cylinder
+		segment.Size = Vector3.new(segLength, radius, radius)
+		segment.Color = color
+		segment.Material = material
+		segment.CanCollide = false
+		segment.CanQuery = false
+		segment.Massless = true
+
+		local segmentOffset = cursor * CFrame.new(0, -segLength / 2, 0) * CFrame.Angles(0, 0, math.rad(90))
+		attachPart(character, anchor, segment, segmentOffset).Parent = folder
+
+		cursor = cursor * CFrame.new(0, -segLength, 0)
+	end
+end
+
+local function buildSerpentineBody(character, torso, bodySpec, tierData, finColor, finMaterial, topColor, bellyColor, folder)
+	local H, W = bodySpec.Height, bodySpec.Width
+
+	local body = Instance.new("Part")
+	body.Name = "FishTorso"
+	body.Shape = Enum.PartType.Ball
+	body.Size = Vector3.new(W, H, W * 1.15)
+	body.Color = topColor
+	body.Material = Enum.Material.SmoothPlastic
+	body.CanCollide = false
+	body.CanQuery = false
+	body.Massless = true
+	attachPart(character, torso, body, CFrame.new()).Parent = folder
+
+	local belly = Instance.new("Part")
+	belly.Name = "FishBelly"
+	belly.Shape = Enum.PartType.Ball
+	belly.Size = Vector3.new(W * 0.7, H * 0.7, W * 0.85)
+	belly.Color = bellyColor
+	belly.Material = Enum.Material.SmoothPlastic
+	belly.CanCollide = false
+	belly.CanQuery = false
+	belly.Massless = true
+	attachPart(character, torso, belly, CFrame.new(0, 0, -W * 0.15)).Parent = folder
+
+	-- Snout: a thin cylinder pointing forward from the top of the body.
+	-- Rotating 90° about Y sends the cylinder's default length axis (local
+	-- X) to world -Z (forward) — same family of rotation as the ship's
+	-- cannon barrels.
+	local snout = Instance.new("Part")
+	snout.Name = "SeahorseSnout"
+	snout.Shape = Enum.PartType.Cylinder
+	snout.Size = Vector3.new(bodySpec.SnoutLength, W * 0.32, W * 0.32)
+	snout.Color = topColor
+	snout.Material = Enum.Material.SmoothPlastic
+	snout.CanCollide = false
+	snout.CanQuery = false
+	snout.Massless = true
+	local snoutOffset = CFrame.new(0, H * 0.35, -(W * 0.4 + bodySpec.SnoutLength / 2)) * CFrame.Angles(0, math.rad(90), 0)
+	attachPart(character, torso, snout, snoutOffset).Parent = folder
+
+	-- Coronet: a small crown spike on top of the head, same "point straight
+	-- up" trick as the fish's back spikes.
+	local coronet = Instance.new("WedgePart")
+	coronet.Name = "Coronet"
+	coronet.Size = Vector3.new(0.35, H * 0.22, H * 0.16)
+	coronet.Color = finColor
+	coronet.Material = finMaterial
+	coronet.CanCollide = false
+	coronet.CanQuery = false
+	coronet.Massless = true
+	local coronetOffset = CFrame.new(0, H * 0.5, -W * 0.2) * CFrame.Angles(math.rad(-90), 0, 0)
+	attachPart(character, torso, coronet, coronetOffset).Parent = folder
+
+	if bodySpec.HasSpines then
+		attachSpikes(character, torso, { Height = H, Length = H * 0.6 }, finColor, finMaterial, folder)
+	end
+
+	-- Small dorsal fin along the back, and two tiny "neck" fins for a bit
+	-- of silhouette variety.
+	local s = tierData.FinScale
+	attachAnimatedFin(character, torso, "DorsalFin", Vector3.new(0.35, H * 0.6 * s, H * 0.35 * s), finColor,
+		CFrame.new(0, H * 0.15, W * 0.45) * CFrame.Angles(0, 0, math.rad(90)), finMaterial).Parent = folder
+	attachFin(character, torso, "LeftFin", Vector3.new(W * 0.6 * s, 0.25, W * 0.6 * s), finColor,
+		CFrame.new(-W * 0.45, H * 0.3, 0) * CFrame.Angles(0, 0, math.rad(25)), finMaterial).Parent = folder
+	attachFin(character, torso, "RightFin", Vector3.new(W * 0.6 * s, 0.25, W * 0.6 * s), finColor,
+		CFrame.new(W * 0.45, H * 0.3, 0) * CFrame.Angles(0, 0, math.rad(-25)), finMaterial).Parent = folder
+
+	attachCurledTail(character, torso, bodySpec, topColor, Enum.Material.SmoothPlastic, folder)
+
+	attachEye(character, torso, CFrame.new(-W * 0.28, H * 0.4, -W * 0.35), folder)
+	attachEye(character, torso, CFrame.new(W * 0.28, H * 0.4, -W * 0.35), folder)
+end
+
+--============================================================
 
 -- Makes every existing body part (Head, torso, arms/legs — whatever the
 -- rig has) fully invisible without touching CanCollide, Anchored, or
@@ -975,77 +1288,49 @@ function CreatureAppearance.Apply(player)
 	hideOriginalBody(character)
 
 	local leaderstats = player:FindFirstChild("leaderstats")
-	local tierIndex = (leaderstats and leaderstats.Evolution.Value or 0) + 1
-	local isMaxTier = tierIndex >= #Config.EvolutionTiers
-	local tier = Config.EvolutionTiers[math.clamp(tierIndex, 1, #Config.EvolutionTiers)]
+	local tierIndex = math.clamp((leaderstats and leaderstats.Evolution.Value or 0) + 1, 1, #Config.TierProgression)
+	local isMaxTier = tierIndex >= #Config.TierProgression
+	local progression = Config.TierProgression[tierIndex]
+
+	local speciesKey = PlayerSpecies.GetSelected(player)
+	local speciesData = Config.Species[speciesKey]
+	local tierData = speciesData.Tiers[tierIndex]
+
 	local level = leaderstats and leaderstats.Level.Value or 1
-	local scale = 1 + (level - 1) * Config.SizePerLevel + tier.SizeBonus
+	local scale = 1 + (level - 1) * Config.SizePerLevel + progression.SizeBonus
 
 	local consumables = player:FindFirstChild("Consumables")
 	local goldenScales = consumables and consumables:FindFirstChild("GoldenScales")
 	local isGolden = goldenScales and goldenScales.Value
 
-	local topColor = isGolden and Color3.fromRGB(230, 190, 60) or tier.Color
-	local bellyColor = isGolden and Color3.fromRGB(255, 224, 130) or lighten(tier.Color, 0.3)
-	local finColor = isGolden and Color3.fromRGB(255, 235, 150) or tier.FinColor
+	local topColor = isGolden and Color3.fromRGB(230, 190, 60) or tierData.Color
+	local bellyColor = isGolden and Color3.fromRGB(255, 224, 130) or lighten(tierData.Color, 0.3)
+	local finColor = isGolden and Color3.fromRGB(255, 235, 150) or tierData.FinColor
 	local finMaterial = isMaxTier and Enum.Material.Neon or Enum.Material.SmoothPlastic
 
 	local folder = Instance.new("Folder")
 	folder.Name = "FishBody"
 
-	local bodySpec = {
-		Length = tier.Body.Length * scale,
-		Width = tier.Body.Width * scale,
-		Height = tier.Body.Height * scale,
-		SnoutLength = tier.Body.SnoutLength * scale,
-	}
-	local L, W, H = bodySpec.Length, bodySpec.Width, bodySpec.Height
-
-	local body = Instance.new("Part")
-	body.Name = "FishTorso"
-	body.Shape = Enum.PartType.Ball
-	body.Size = Vector3.new(W, H, L)
-	body.Color = topColor
-	body.Material = Enum.Material.SmoothPlastic
-	body.CanCollide = false
-	body.CanQuery = false
-	body.Massless = true
-	attachPart(character, torso, body, CFrame.new()).Parent = folder
-
-	local belly = Instance.new("Part")
-	belly.Name = "FishBelly"
-	belly.Shape = Enum.PartType.Ball
-	belly.Size = Vector3.new(W * 0.75, H * 0.55, L * 0.8)
-	belly.Color = bellyColor
-	belly.Material = Enum.Material.SmoothPlastic
-	belly.CanCollide = false
-	belly.CanQuery = false
-	belly.Massless = true
-	attachPart(character, torso, belly, CFrame.new(0, -H * 0.3, 0)).Parent = folder
-
-	attachSnout(character, torso, bodySpec, topColor).Parent = folder
-
-	if tier.Body.HasTeeth then
-		attachTeeth(character, torso, bodySpec, folder)
+	if speciesData.BodyStyle == "serpentine" then
+		local bodySpec = {
+			Height = tierData.Body.Height * scale,
+			Width = tierData.Body.Width * scale,
+			SnoutLength = tierData.Body.SnoutLength * scale,
+			TailSegments = tierData.Body.TailSegments,
+			HasSpines = tierData.Body.HasSpines,
+		}
+		buildSerpentineBody(character, torso, bodySpec, tierData, finColor, finMaterial, topColor, bellyColor, folder)
+	else
+		local bodySpec = {
+			Length = tierData.Body.Length * scale,
+			Width = tierData.Body.Width * scale,
+			Height = tierData.Body.Height * scale,
+			SnoutLength = tierData.Body.SnoutLength * scale,
+			HasTeeth = tierData.Body.HasTeeth,
+			HasSpikes = tierData.Body.HasSpikes,
+		}
+		buildStreamlinedBody(character, torso, bodySpec, tierData, finColor, finMaterial, topColor, bellyColor, folder)
 	end
-	if tier.Body.HasSpikes then
-		attachSpikes(character, torso, bodySpec, finColor, finMaterial, folder)
-	end
-
-	local s = tier.FinScale
-	attachFin(character, torso, "TailFinUp", Vector3.new(0.4, H * 0.9 * s, L * 0.35 * s), finColor,
-		CFrame.new(0, H * 0.15, L / 2 + L * 0.15) * CFrame.Angles(0, math.rad(180), math.rad(24)), finMaterial).Parent = folder
-	attachFin(character, torso, "TailFinDown", Vector3.new(0.4, H * 0.9 * s, L * 0.35 * s), finColor,
-		CFrame.new(0, -H * 0.4, L / 2 + L * 0.15) * CFrame.Angles(0, math.rad(180), math.rad(-24)), finMaterial).Parent = folder
-	attachFin(character, torso, "DorsalFin", Vector3.new(0.4, H * 0.9 * s, H * 0.9 * s), finColor,
-		CFrame.new(0, H * 0.5, L * 0.05) * CFrame.Angles(0, 0, math.rad(90)), finMaterial).Parent = folder
-	attachFin(character, torso, "LeftFin", Vector3.new(W * 0.9 * s, 0.3, L * 0.3 * s), finColor,
-		CFrame.new(-W / 2, -H * 0.1, -L * 0.1) * CFrame.Angles(0, 0, math.rad(20)), finMaterial).Parent = folder
-	attachFin(character, torso, "RightFin", Vector3.new(W * 0.9 * s, 0.3, L * 0.3 * s), finColor,
-		CFrame.new(W / 2, -H * 0.1, -L * 0.1) * CFrame.Angles(0, 0, math.rad(-20)), finMaterial).Parent = folder
-
-	attachEye(character, torso, bodySpec, -1, folder)
-	attachEye(character, torso, bodySpec, 1, folder)
 
 	if isMaxTier or isGolden then
 		local glow = Instance.new("PointLight")
@@ -1083,6 +1368,7 @@ local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerUpgrades = require(script.Parent.PlayerUpgrades)
 local RobuxShop = require(script.Parent.RobuxShop)
 local CreatureAppearance = require(script.Parent.CreatureAppearance)
+local PlayerSpecies = require(script.Parent.PlayerSpecies)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -1150,10 +1436,10 @@ function PlayerProgress.ApplyLevelStats(player)
 	end
 
 	local level = leaderstats.Level.Value
-	local tier = Config.EvolutionTiers[math.clamp(leaderstats.Evolution.Value + 1, 1, #Config.EvolutionTiers)]
+	local progression = Config.TierProgression[math.clamp(leaderstats.Evolution.Value + 1, 1, #Config.TierProgression)]
 
 	local levelSpeedBonus = (level - 1) * Config.WalkSpeedPerLevel
-	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + tier.SpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
+	humanoid.WalkSpeed = Config.BaseWalkSpeed + levelSpeedBonus + progression.SpeedBonus + PlayerUpgrades.GetExtraWalkSpeed(player)
 
 	local previousMaxHealth = humanoid.MaxHealth
 	local newMaxHealth = 100 + PlayerUpgrades.GetExtraMaxHealth(player)
@@ -1210,7 +1496,8 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 			levelValue.Value = 1
 			xpValue.Value = 0
 			evolved = true
-			evolutionName = Config.EvolutionTiers[evolutionValue.Value + 1].Name
+			local species = Config.Species[PlayerSpecies.GetSelected(player)]
+			evolutionName = species.Tiers[evolutionValue.Value + 1].Name
 		else
 			levelValue.Value = math.min(nextLevel, Config.MaxLevel)
 		end
@@ -1240,6 +1527,105 @@ return PlayerProgress
 				</Properties>
 			</Item>
 			<Item class="ModuleScript" referent="RBX12">
+				<Properties>
+					<string name="Name">PlayerSpecies</string>
+					<ProtectedString name="Source"><![CDATA[-- Tracks which water-creature species each player owns and which one is
+-- currently selected. The two starters (see Config.StarterSpecies) are
+-- always owned for free; others must be bought in the shop's Creatures tab
+-- (ShopCost > 0) before they can be selected. Server-authoritative: the
+-- client only ever requests a purchase or a selection, never sets either
+-- directly.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local PlayerSpecies = {}
+
+function PlayerSpecies.Init(player)
+	if player:FindFirstChild("Species") then
+		return
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "Species"
+
+	for _, key in ipairs(Config.SpeciesOrder) do
+		local owned = Instance.new("BoolValue")
+		owned.Name = key
+		owned.Value = Config.Species[key].ShopCost == 0
+		owned.Parent = folder
+	end
+
+	folder.Parent = player
+
+	if not player:GetAttribute("SelectedSpecies") then
+		player:SetAttribute("SelectedSpecies", Config.DefaultSpecies)
+	end
+end
+
+function PlayerSpecies.IsOwned(player, key)
+	local folder = player:FindFirstChild("Species")
+	local owned = folder and folder:FindFirstChild(key)
+	return owned ~= nil and owned.Value == true
+end
+
+function PlayerSpecies.GetSelected(player)
+	local key = player:GetAttribute("SelectedSpecies")
+	if key and Config.Species[key] then
+		return key
+	end
+	return Config.DefaultSpecies
+end
+
+-- Returns (true) on success or (false, reason) on failure. Does not
+-- teleport or rebuild appearance — callers (SkySpawn's portal handler) do
+-- that afterward.
+function PlayerSpecies.Select(player, key)
+	if not Config.Species[key] then
+		return false, "Unknown species"
+	end
+	if not PlayerSpecies.IsOwned(player, key) then
+		return false, "Not owned"
+	end
+
+	player:SetAttribute("SelectedSpecies", key)
+	return true
+end
+
+-- Returns (true) on success or (false, reason) on failure.
+function PlayerSpecies.Purchase(player, key)
+	local species = Config.Species[key]
+	if not species then
+		return false, "Unknown species"
+	end
+	if species.ShopCost <= 0 then
+		return false, "Not purchasable"
+	end
+	if PlayerSpecies.IsOwned(player, key) then
+		return false, "Already owned"
+	end
+
+	local leaderstats = player:FindFirstChild("leaderstats")
+	local folder = player:FindFirstChild("Species")
+	if not leaderstats or not folder then
+		return false, "Not ready"
+	end
+
+	if leaderstats.Money.Value < species.ShopCost then
+		return false, "Not enough money"
+	end
+
+	leaderstats.Money.Value -= species.ShopCost
+	folder[key].Value = true
+
+	return true
+end
+
+return PlayerSpecies
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX13">
 				<Properties>
 					<string name="Name">PlayerUpgrades</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's shop upgrade tiers (a non-leaderstat "Upgrades" folder,
@@ -1348,7 +1734,7 @@ return PlayerUpgrades
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX13">
+			<Item class="ModuleScript" referent="RBX14">
 				<Properties>
 					<string name="Name">RobuxShop</string>
 					<ProtectedString name="Source"><![CDATA[-- The "Robux Shop": real-money super powers bought via MarketplaceService
@@ -1498,14 +1884,15 @@ return RobuxShop
 				</Properties>
 			</Item>
 		</Item>
-		<Item class="Script" referent="RBX14">
+		<Item class="Script" referent="RBX15">
 			<Properties>
 				<string name="Name">PlayerCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Player-vs-player combat. Each evolution tier grants a different attack
--- (Config.EvolutionTiers[i].Attack) — this script always reads the
--- attacker's CURRENT Evolution tier live, off their leaderstats, every time
--- they attack. There's no cached "equipped attack" anywhere, so evolving
--- swaps your moveset on the very next attack with no extra bookkeeping.
+-- (Config.TierProgression[i].Attack, shared by every species) — this
+-- script always reads the attacker's CURRENT Evolution tier live, off their
+-- leaderstats, every time they attack. There's no cached "equipped attack"
+-- anywhere, so evolving swaps your moveset on the very next attack with no
+-- extra bookkeeping.
 --
 -- Fully server-authoritative: the client only ever requests an attack (no
 -- payload), and this script decides cooldown, targets, and damage. Damage
@@ -1519,6 +1906,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local PlayerSpecies = require(ServerScriptService.Modules.PlayerSpecies)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -1550,9 +1938,13 @@ end
 
 local function getAttackForPlayer(player)
 	local leaderstats = player:FindFirstChild("leaderstats")
-	local tierIndex = (leaderstats and leaderstats.Evolution.Value or 0) + 1
-	local tier = Config.EvolutionTiers[math.clamp(tierIndex, 1, #Config.EvolutionTiers)]
-	return tier.Attack, tier
+	local tierIndex = math.clamp((leaderstats and leaderstats.Evolution.Value or 0) + 1, 1, #Config.TierProgression)
+	local attack = Config.TierProgression[tierIndex].Attack
+
+	local species = Config.Species[PlayerSpecies.GetSelected(player)]
+	local finColor = species.Tiers[tierIndex].FinColor
+
+	return attack, finColor
 end
 
 AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
@@ -1567,7 +1959,7 @@ AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
 		return
 	end
 
-	local attack, tier = getAttackForPlayer(attackerPlayer)
+	local attack, finColor = getAttackForPlayer(attackerPlayer)
 	if not attack then
 		return
 	end
@@ -1615,7 +2007,7 @@ AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
 		end
 	end
 
-	AttackFXEvent:FireAllClients(attackerRoot.Position, attack.Range, tier.FinColor)
+	AttackFXEvent:FireAllClients(attackerRoot.Position, attack.Range, finColor)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
@@ -1624,7 +2016,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX15">
+		<Item class="Script" referent="RBX16">
 			<Properties>
 				<string name="Name">RaftDestruction</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
@@ -1681,7 +2073,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX16">
+		<Item class="Script" referent="RBX17">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -1772,7 +2164,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX17">
+		<Item class="Script" referent="RBX18">
 			<Properties>
 				<string name="Name">ShipCannons</string>
 				<ProtectedString name="Source"><![CDATA[-- Ships tagged "Cannon" (Frigates and Galleons — see ShipSpawner) periodically
@@ -1890,7 +2282,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX18">
+		<Item class="Script" referent="RBX19">
 			<Properties>
 				<string name="Name">ShipCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
@@ -1972,7 +2364,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX19">
+		<Item class="Script" referent="RBX20">
 			<Properties>
 				<string name="Name">ShipMovement</string>
 				<ProtectedString name="Source"><![CDATA[-- Makes each ship slowly drift in a small circle around its spawn point,
@@ -2019,7 +2411,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX20">
+		<Item class="Script" referent="RBX21">
 			<Properties>
 				<string name="Name">ShipSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
@@ -2262,7 +2654,10 @@ local function addCannonBarrels(ship, hull)
 		barrel.Material = Enum.Material.Metal
 		barrel.Anchored = true
 		barrel.CanCollide = false
-		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, 0, math.rad(90))
+		-- A Cylinder's thin axis defaults to local X; rotating 90° about Y
+		-- (not Z — that would stand it upright instead) sends that axis to
+		-- world Z, pointing the barrel outward through the hull's side.
+		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, math.rad(90), 0)
 		barrel.Parent = ship
 	end
 end
@@ -2404,17 +2799,20 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX21">
+		<Item class="Script" referent="RBX22">
 			<Properties>
 				<string name="Name">ShopHandler</string>
-				<ProtectedString name="Source"><![CDATA[-- Server side of both shops:
---  - the Money-based upgrade shop: validates and applies purchases requested
---    by UpgradeShop.client.lua.
---  - the Robux shop: prompts the real-money purchase dialog and wires up
+				<ProtectedString name="Source"><![CDATA[-- Server side of all three shop tabs:
+--  - Upgrades (Money): validates and applies purchases requested by
+--    UpgradeShop.client.lua.
+--  - Creatures (Money): buys permanent access to a non-starter species
+--    (see PlayerSpecies.lua) — doesn't select it, just unlocks it for the
+--    portal/species-select panel.
+--  - Robux Shop: prompts the real-money purchase dialog and wires up
 --    MarketplaceService.ProcessReceipt (see RobuxShop.lua for what's granted
 --    and its persistence caveat).
--- The client never sets a tier, spends money, or grants itself a power
--- directly — it only asks, and this script decides.
+-- The client never sets a tier, spends money, or grants itself a power or
+-- species directly — it only asks, and this script decides.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -2422,6 +2820,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
 local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
 local RobuxShop = require(ServerScriptService.Modules.RobuxShop)
+local PlayerSpecies = require(ServerScriptService.Modules.PlayerSpecies)
 
 RobuxShop.SetupReceiptProcessing()
 
@@ -2453,6 +2852,20 @@ if not PromptRobuxPurchaseEvent then
 	PromptRobuxPurchaseEvent.Parent = Remotes
 end
 
+local PurchaseSpeciesEvent = Remotes:FindFirstChild("PurchaseSpecies")
+if not PurchaseSpeciesEvent then
+	PurchaseSpeciesEvent = Instance.new("RemoteEvent")
+	PurchaseSpeciesEvent.Name = "PurchaseSpecies"
+	PurchaseSpeciesEvent.Parent = Remotes
+end
+
+local SpeciesResultEvent = Remotes:FindFirstChild("SpeciesResult")
+if not SpeciesResultEvent then
+	SpeciesResultEvent = Instance.new("RemoteEvent")
+	SpeciesResultEvent.Name = "SpeciesResult"
+	SpeciesResultEvent.Parent = Remotes
+end
+
 PurchaseUpgradeEvent.OnServerEvent:Connect(function(player, upgradeKey)
 	if typeof(upgradeKey) ~= "string" then
 		return
@@ -2474,24 +2887,58 @@ PromptRobuxPurchaseEvent.OnServerEvent:Connect(function(player, productKey)
 
 	RobuxShop.PromptPurchase(player, productKey)
 end)
+
+PurchaseSpeciesEvent.OnServerEvent:Connect(function(player, speciesKey)
+	if typeof(speciesKey) ~= "string" then
+		return
+	end
+
+	local success, resultOrReason = PlayerSpecies.Purchase(player, speciesKey)
+	SpeciesResultEvent:FireClient(player, success, success and nil or resultOrReason)
+end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX22">
+		<Item class="Script" referent="RBX23">
 			<Properties>
 				<string name="Name">SkySpawn</string>
-				<ProtectedString name="Source"><![CDATA[-- Every player (re)spawns on an invisible, walkable platform high above the
--- water — Transparency 1 + CanCollide true means you can stand on it and
--- still see straight through it to the ocean below. A glowing portal on the
--- platform teleports whoever touches it down to the water surface. Since
--- this is the only SpawnLocation in the place, every respawn starts here
--- too, so dying sends you back through the portal flow.
+				<ProtectedString name="Source"><![CDATA[-- Every player (re)spawns inside a glass cube high above the water — an
+-- invisible, walkable floor (Transparency 1 + CanCollide true, so you can
+-- stand on it and still see straight through it to the ocean below) with
+-- translucent glass walls/ceiling and glowing corner pillars. A ring portal
+-- in the middle of the cube prompts a species choice, then teleports you
+-- down to the water surface as whichever creature you picked. Since this
+-- is the only SpawnLocation in the place, every respawn starts here too.
 
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
+local PlayerSpecies = require(ServerScriptService.Modules.PlayerSpecies)
+local PlayerProgress = require(ServerScriptService.Modules.PlayerProgress)
+
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if not Remotes then
+	Remotes = Instance.new("Folder")
+	Remotes.Name = "Remotes"
+	Remotes.Parent = ReplicatedStorage
+end
+
+local PromptSpeciesSelectEvent = Remotes:FindFirstChild("PromptSpeciesSelect")
+if not PromptSpeciesSelectEvent then
+	PromptSpeciesSelectEvent = Instance.new("RemoteEvent")
+	PromptSpeciesSelectEvent.Name = "PromptSpeciesSelect"
+	PromptSpeciesSelectEvent.Parent = Remotes
+end
+
+local SelectSpeciesEvent = Remotes:FindFirstChild("SelectSpecies")
+if not SelectSpeciesEvent then
+	SelectSpeciesEvent = Instance.new("RemoteEvent")
+	SelectSpeciesEvent.Name = "SelectSpecies"
+	SelectSpeciesEvent.Parent = Remotes
+end
 
 if Workspace:GetAttribute("SkySpawnGenerated") then
 	return
@@ -2532,26 +2979,170 @@ for _, edge in ipairs(edgeOffsets) do
 	bar.Parent = Workspace
 end
 
--- The portal: a glowing vertical disc a short walk from the platform
--- center. A Cylinder part's flat round face already stands vertical with
--- no extra rotation needed (its thin axis is local X).
-local portal = Instance.new("Part")
-portal.Name = "Portal"
-portal.Shape = Enum.PartType.Cylinder
-portal.Size = Vector3.new(1, 14, 14)
-portal.Anchored = true
-portal.CanCollide = false
-portal.Material = Enum.Material.Neon
-portal.Color = Color3.fromRGB(80, 180, 255)
-portal.Transparency = 0.25
-portal.CFrame = CFrame.new(Config.WaterCenter.X, skyY + 7, Config.WaterCenter.Z + Config.SkySpawnPortalOffset)
-portal.Parent = Workspace
+--============================================================
+-- The glass cube enclosing the spawn area
+--============================================================
+
+local cubeHalfWidth = platform.Size.X / 2 + 4
+local cubeHeight = Config.SkySpawnCubeHeight
+local wallThickness = 1
+
+local function createWall(name, cframe, size)
+	local wall = Instance.new("Part")
+	wall.Name = name
+	wall.Size = size
+	wall.CFrame = cframe
+	wall.Anchored = true
+	wall.CanCollide = true
+	wall.Material = Enum.Material.Glass
+	wall.Color = Color3.fromRGB(150, 210, 255)
+	wall.Transparency = 0.8
+	wall.Parent = Workspace
+	return wall
+end
+
+local cubeCenterY = skyY + cubeHeight / 2
+createWall("SkyCubeWallNorth",
+	CFrame.new(Config.WaterCenter.X, cubeCenterY, Config.WaterCenter.Z + cubeHalfWidth),
+	Vector3.new(cubeHalfWidth * 2, cubeHeight, wallThickness))
+createWall("SkyCubeWallSouth",
+	CFrame.new(Config.WaterCenter.X, cubeCenterY, Config.WaterCenter.Z - cubeHalfWidth),
+	Vector3.new(cubeHalfWidth * 2, cubeHeight, wallThickness))
+createWall("SkyCubeWallEast",
+	CFrame.new(Config.WaterCenter.X + cubeHalfWidth, cubeCenterY, Config.WaterCenter.Z),
+	Vector3.new(wallThickness, cubeHeight, cubeHalfWidth * 2))
+createWall("SkyCubeWallWest",
+	CFrame.new(Config.WaterCenter.X - cubeHalfWidth, cubeCenterY, Config.WaterCenter.Z),
+	Vector3.new(wallThickness, cubeHeight, cubeHalfWidth * 2))
+createWall("SkyCubeCeiling",
+	CFrame.new(Config.WaterCenter.X, skyY + cubeHeight, Config.WaterCenter.Z),
+	Vector3.new(cubeHalfWidth * 2, wallThickness, cubeHalfWidth * 2))
+
+-- Glowing corner pillars: a Cylinder's default thin axis is local X, so
+-- rotating 90° about Z (sending local X to world Y) stands it upright —
+-- same trick as the ship masts / coral trunks.
+local function createCornerPillar(x, z)
+	local pillar = Instance.new("Part")
+	pillar.Name = "SkyCubePillar"
+	pillar.Shape = Enum.PartType.Cylinder
+	pillar.Size = Vector3.new(cubeHeight, 1.2, 1.2)
+	pillar.CFrame = CFrame.new(x, cubeCenterY, z) * CFrame.Angles(0, 0, math.rad(90))
+	pillar.Anchored = true
+	pillar.CanCollide = false
+	pillar.Material = Enum.Material.Neon
+	pillar.Color = Color3.fromRGB(120, 200, 255)
+	pillar.Parent = Workspace
+end
+for _, x in ipairs({ Config.WaterCenter.X + cubeHalfWidth, Config.WaterCenter.X - cubeHalfWidth }) do
+	for _, z in ipairs({ Config.WaterCenter.Z + cubeHalfWidth, Config.WaterCenter.Z - cubeHalfWidth }) do
+		createCornerPillar(x, z)
+	end
+end
+
+--============================================================
+-- The portal: a double ring around a glowing disc, facing the platform
+-- (i.e. its normal points along Z, back toward spawn center) so it reads
+-- face-on to a player walking up to it — not edge-on.
+--============================================================
+
+local portalRadius = Config.SkySpawnPortalRadius
+local portalCenter = CFrame.new(
+	Config.WaterCenter.X,
+	skyY + portalRadius + 2,
+	Config.WaterCenter.Z + Config.SkySpawnPortalOffset
+)
+
+local portalModel = Instance.new("Model")
+portalModel.Name = "Portal"
+
+-- Outer frame ring: segments placed via a Z-axis "roll" rotation then
+-- translated along the now-rotated local Y — the same technique as the
+-- giant fan corals — which traces a circle in portalCenter's X-Y plane
+-- (normal along Z, matching the direction a player approaches from).
+local outerSegments = 16
+for i = 1, outerSegments do
+	local angle = (i - 1) / outerSegments * math.pi * 2
+	local seg = Instance.new("Part")
+	seg.Name = "PortalFrame"
+	seg.Size = Vector3.new(1.6, 2.2, 1)
+	seg.Color = Color3.fromRGB(35, 40, 50)
+	seg.Material = Enum.Material.Metal
+	seg.Anchored = true
+	seg.CanCollide = false
+	seg.CFrame = portalCenter * CFrame.Angles(0, 0, angle) * CFrame.new(0, portalRadius + 0.9, 0)
+	seg.Parent = portalModel
+end
+
+-- Inner glow ring — same placement technique, smaller radius, brighter.
+-- Kept in its own table so it can be spun for a swirling-portal effect.
+local innerRingParts = {}
+local innerSegments = 20
+for i = 1, innerSegments do
+	local seg = Instance.new("Part")
+	seg.Name = "PortalGlow"
+	seg.Size = Vector3.new(1, 1.3, 0.4)
+	seg.Color = Color3.fromRGB(90, 190, 255)
+	seg.Material = Enum.Material.Neon
+	seg.Anchored = true
+	seg.CanCollide = false
+	seg.Parent = portalModel
+	table.insert(innerRingParts, seg)
+end
+
+-- The glowing center disc. A Cylinder's thin axis defaults to local X, so
+-- (unlike the ring above, which is naturally correct) it needs an explicit
+-- 90°-about-Y rotation to send that thin axis to world Z — otherwise the
+-- disc would stand edge-on to an approaching player instead of face-on.
+local disc = Instance.new("Part")
+disc.Name = "PortalDisc"
+disc.Shape = Enum.PartType.Cylinder
+disc.Size = Vector3.new(0.4, portalRadius * 1.8, portalRadius * 1.8)
+disc.Color = Color3.fromRGB(80, 180, 255)
+disc.Material = Enum.Material.Neon
+disc.Transparency = 0.35
+disc.Anchored = true
+disc.CanCollide = false
+disc.CFrame = portalCenter * CFrame.Angles(0, math.rad(90), 0)
+disc.Parent = portalModel
 
 local light = Instance.new("PointLight")
 light.Color = Color3.fromRGB(120, 200, 255)
-light.Range = 24
-light.Brightness = 2
-light.Parent = portal
+light.Range = 28
+light.Brightness = 2.5
+light.Parent = disc
+
+-- The touch trigger — same orientation fix as the disc, invisible, sized
+-- to roughly cover the ring so it's easy to walk into.
+local trigger = Instance.new("Part")
+trigger.Name = "PortalTrigger"
+trigger.Shape = Enum.PartType.Cylinder
+trigger.Size = Vector3.new(3, portalRadius * 2, portalRadius * 2)
+trigger.Transparency = 1
+trigger.Anchored = true
+trigger.CanCollide = false
+trigger.CFrame = portalCenter * CFrame.Angles(0, math.rad(90), 0)
+trigger.Parent = portalModel
+
+portalModel.Parent = Workspace
+
+-- Slowly spins the inner ring around the portal's own facing axis (Z) for
+-- a swirling effect. Updated a few times a second rather than every frame
+-- — it's purely cosmetic, no need for 60Hz replication.
+task.spawn(function()
+	local rotation = 0
+	while portalModel.Parent do
+		rotation += math.rad(4)
+		for i, seg in ipairs(innerRingParts) do
+			local placementAngle = (i - 1) / innerSegments * math.pi * 2
+			seg.CFrame = portalCenter * CFrame.Angles(0, 0, placementAngle + rotation) * CFrame.new(0, portalRadius, 0)
+		end
+		task.wait(0.1)
+	end
+end)
+
+--============================================================
+-- Species choice + teleport
+--============================================================
 
 local dropPoint = Vector3.new(
 	Config.WaterCenter.X,
@@ -2559,9 +3150,9 @@ local dropPoint = Vector3.new(
 	Config.WaterCenter.Z
 )
 
-local lastTeleportAt = {}
+local lastPromptAt = {}
 
-portal.Touched:Connect(function(otherPart)
+trigger.Touched:Connect(function(otherPart)
 	local character = otherPart.Parent
 	local player = character and Players:GetPlayerFromCharacter(character)
 	if not player then
@@ -2569,23 +3160,41 @@ portal.Touched:Connect(function(otherPart)
 	end
 
 	local now = os.clock()
-	if lastTeleportAt[player] and now - lastTeleportAt[player] < 2 then
+	if lastPromptAt[player] and now - lastPromptAt[player] < 2 then
 		return
 	end
-	lastTeleportAt[player] = now
+	lastPromptAt[player] = now
 
-	character:PivotTo(CFrame.new(dropPoint))
+	PromptSpeciesSelectEvent:FireClient(player)
+end)
+
+SelectSpeciesEvent.OnServerEvent:Connect(function(player, speciesKey)
+	if typeof(speciesKey) ~= "string" then
+		return
+	end
+
+	local success = PlayerSpecies.Select(player, speciesKey)
+	if not success then
+		return
+	end
+
+	PlayerProgress.ApplyLevelStats(player) -- rebuilds the fish body for the new species
+
+	local character = player.Character
+	if character then
+		character:PivotTo(CFrame.new(dropPoint))
+	end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-	lastTeleportAt[player] = nil
+	lastPromptAt[player] = nil
 end)
 
 Workspace:SetAttribute("SkySpawnGenerated", true)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX23">
+		<Item class="Script" referent="RBX24">
 			<Properties>
 				<string name="Name">WorldSetup</string>
 				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor
@@ -2662,15 +3271,15 @@ end
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX24">
+	<Item class="StarterPlayer" referent="RBX25">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX25">
+		<Item class="StarterPlayerScripts" referent="RBX26">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX26">
+			<Item class="LocalScript" referent="RBX27">
 				<Properties>
 					<string name="Name">AttackController</string>
 					<ProtectedString name="Source"><![CDATA[-- Attack input: press F to attack. The server (PlayerCombat.server.lua)
@@ -2724,7 +3333,50 @@ end)
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX27">
+			<Item class="LocalScript" referent="RBX28">
+				<Properties>
+					<string name="Name">CreatureAnimator</string>
+					<ProtectedString name="Source"><![CDATA[-- Gives every player's fish body a gentle swimming animation: the tail (or,
+-- on sea horses, the dorsal fin) wags side to side via a sine wave. Runs
+-- for every character in the server, not just the local player, so
+-- everyone's creature looks alive, not just your own.
+--
+-- Targets Motor6D joints named "SwimMotor" (see CreatureAppearance.lua's
+-- attachAnimatedFin) rather than the WeldConstraints used everywhere else
+-- on the fish body — WeldConstraint bakes in a fixed relative transform and
+-- fights any script that tries to move the constrained part afterward;
+-- Motor6D is built for exactly this kind of live, per-frame update.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local WAG_SPEED = 4.5 -- radians/sec
+local WAG_AMOUNT = math.rad(18)
+
+RunService.RenderStepped:Connect(function()
+	local t = os.clock()
+	local wiggle = math.sin(t * WAG_SPEED) * WAG_AMOUNT
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		local character = player.Character
+		local fishBody = character and character:FindFirstChild("FishBody")
+		if fishBody then
+			for _, part in ipairs(fishBody:GetChildren()) do
+				local motor = part:FindFirstChild("SwimMotor")
+				if motor then
+					local baseC0 = motor:GetAttribute("BaseC0")
+					if baseC0 then
+						motor.C0 = baseC0 * CFrame.Angles(0, wiggle, 0)
+					end
+				end
+			end
+		end
+	end
+end)
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="LocalScript" referent="RBX29">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
@@ -2837,9 +3489,8 @@ local levelValue = leaderstats:WaitForChild("Level")
 local xpValue = leaderstats:WaitForChild("XP")
 
 local function refreshAttackLabel()
-	local tierIndex = math.clamp(evolutionValue.Value + 1, 1, #Config.EvolutionTiers)
-	local tier = Config.EvolutionTiers[tierIndex]
-	attackLabel.Text = "Attack (F): " .. tier.Attack.Name
+	local tierIndex = math.clamp(evolutionValue.Value + 1, 1, #Config.TierProgression)
+	attackLabel.Text = "Attack (F): " .. Config.TierProgression[tierIndex].Attack.Name
 end
 
 local function refreshXpBar()
@@ -2919,14 +3570,156 @@ refreshDepthChargeLabel()
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX28">
+			<Item class="LocalScript" referent="RBX30">
+				<Properties>
+					<string name="Name">SpeciesSelect</string>
+					<ProtectedString name="Source"><![CDATA[-- The species-choice panel shown when you touch the sky-spawn portal.
+-- Lists every species in Config.SpeciesOrder; owned ones (always the free
+-- starters, plus anything bought in the shop's Creatures tab) get a
+-- "Choose" button, locked ones show their shop cost instead. Choosing just
+-- fires a request at the server — SkySpawn.server.lua validates ownership
+-- and does the actual teleport.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Modules.GameConfig)
+
+local player = Players.LocalPlayer
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local PromptSpeciesSelectEvent = Remotes:WaitForChild("PromptSpeciesSelect")
+local SelectSpeciesEvent = Remotes:WaitForChild("SelectSpecies")
+
+local speciesFolder = player:WaitForChild("Species")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SpeciesSelect"
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 10
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local backdrop = Instance.new("Frame")
+backdrop.Size = UDim2.new(1, 0, 1, 0)
+backdrop.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+backdrop.BackgroundTransparency = 0.45
+backdrop.Visible = false
+backdrop.Parent = screenGui
+
+local panel = Instance.new("Frame")
+panel.Size = UDim2.new(0, 560, 0, 260)
+panel.Position = UDim2.new(0.5, -280, 0.5, -130)
+panel.BackgroundColor3 = Color3.fromRGB(15, 30, 48)
+panel.Parent = backdrop
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(90, 170, 220)
+stroke.Thickness = 2
+stroke.Parent = panel
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 14)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 24
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Text = "Choose your creature"
+title.Parent = panel
+
+local cardsHolder = Instance.new("Frame")
+cardsHolder.Size = UDim2.new(1, -32, 1, -70)
+cardsHolder.Position = UDim2.new(0, 16, 0, 58)
+cardsHolder.BackgroundTransparency = 1
+cardsHolder.Parent = panel
+
+local cardsLayout = Instance.new("UIListLayout")
+cardsLayout.FillDirection = Enum.FillDirection.Horizontal
+cardsLayout.Padding = UDim.new(0, 14)
+cardsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+cardsLayout.Parent = cardsHolder
+
+local cardWidth = (560 - 32 - 14 * (#Config.SpeciesOrder - 1)) / #Config.SpeciesOrder
+
+for _, key in ipairs(Config.SpeciesOrder) do
+	local species = Config.Species[key]
+	local previewColor = species.Tiers[1].Color
+
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(0, cardWidth, 1, 0)
+	card.BackgroundColor3 = Color3.fromRGB(25, 45, 68)
+	card.Parent = cardsHolder
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+	local swatch = Instance.new("Frame")
+	swatch.Size = UDim2.new(0, 44, 0, 44)
+	swatch.Position = UDim2.new(0.5, -22, 0, 14)
+	swatch.BackgroundColor3 = previewColor
+	swatch.Parent = card
+	Instance.new("UICorner", swatch).CornerRadius = UDim.new(1, 0)
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(1, -8, 0, 20)
+	nameLabel.Position = UDim2.new(0, 4, 0, 64)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 16
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.Text = species.Name
+	nameLabel.Parent = card
+
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, -20, 0, 32)
+	button.Position = UDim2.new(0, 10, 1, -44)
+	button.Font = Enum.Font.GothamBold
+	button.TextSize = 14
+	button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	button.Parent = card
+	Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
+
+	local ownedValue = speciesFolder:FindFirstChild(key)
+
+	local function refreshButton()
+		local owned = ownedValue and ownedValue.Value
+		if owned then
+			button.Text = "Choose"
+			button.BackgroundColor3 = Color3.fromRGB(50, 150, 90)
+		else
+			button.Text = "Locked ($" .. species.ShopCost .. ")"
+			button.BackgroundColor3 = Color3.fromRGB(70, 75, 85)
+		end
+	end
+
+	if ownedValue then
+		ownedValue:GetPropertyChangedSignal("Value"):Connect(refreshButton)
+	end
+	refreshButton()
+
+	button.MouseButton1Click:Connect(function()
+		if ownedValue and ownedValue.Value then
+			SelectSpeciesEvent:FireServer(key)
+			backdrop.Visible = false
+		end
+	end)
+end
+
+PromptSpeciesSelectEvent.OnClientEvent:Connect(function()
+	backdrop.Visible = true
+end)
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="LocalScript" referent="RBX31">
 				<Properties>
 					<string name="Name">UpgradeShop</string>
-					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with two tabs:
---  - "Upgrades": the six Money-based upgrades. Costs/tiers are read
+					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with three tabs:
+--  - "Upgrades": the six Money-based stat upgrades. Costs/tiers are read
 --    directly off the replicated Upgrades folder + leaderstats and computed
 --    with the same GameConfig.UpgradeCost formula the server uses, so the
 --    UI always matches what a purchase will actually cost.
+--  - "Creatures": buy permanent access to non-starter species (Dolphin
+--    etc.) with Money. Doesn't select the species — that happens at the
+--    sky-spawn portal (see SpeciesSelect.client.lua) — this just unlocks it.
 --  - "Robux Shop": the four real-money super powers. Buying just fires a
 --    request at the server, which prompts Roblox's own purchase dialog —
 --    this script never grants anything itself.
@@ -2941,6 +3734,17 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local PurchaseUpgradeEvent = Remotes:WaitForChild("PurchaseUpgrade")
 local UpgradeResultEvent = Remotes:WaitForChild("UpgradeResult")
 local PromptRobuxPurchaseEvent = Remotes:WaitForChild("PromptRobuxPurchase")
+local PurchaseSpeciesEvent = Remotes:WaitForChild("PurchaseSpecies")
+local SpeciesResultEvent = Remotes:WaitForChild("SpeciesResult")
+
+local UPGRADE_ICONS = {
+	AttackPower = "⚔️",
+	Vitality = "❤️",
+	Armor = "🛡️",
+	SwimSpeed = "🐟",
+	MoneyBoost = "💰",
+	XPBoost = "✨",
+}
 
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -2951,153 +3755,220 @@ screenGui.Parent = playerGui
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ShopToggle"
-toggleButton.Size = UDim2.new(0, 110, 0, 40)
-toggleButton.Position = UDim2.new(1, -130, 1, -60)
+toggleButton.Size = UDim2.new(0, 120, 0, 44)
+toggleButton.Position = UDim2.new(1, -140, 1, -64)
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.TextSize = 20
-toggleButton.Text = "Shop"
-toggleButton.BackgroundColor3 = Color3.fromRGB(30, 90, 140)
+toggleButton.Text = "🛒 Shop"
+toggleButton.BackgroundColor3 = Color3.fromRGB(25, 100, 150)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.AutoButtonColor = false
 toggleButton.Parent = screenGui
-Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(0, 10)
+
+local toggleGradient = Instance.new("UIGradient")
+toggleGradient.Color = ColorSequence.new(Color3.fromRGB(40, 130, 190), Color3.fromRGB(20, 80, 130))
+toggleGradient.Rotation = 90
+toggleGradient.Parent = toggleButton
+
+toggleButton.MouseEnter:Connect(function()
+	toggleButton.BackgroundColor3 = Color3.fromRGB(35, 120, 175)
+end)
+toggleButton.MouseLeave:Connect(function()
+	toggleButton.BackgroundColor3 = Color3.fromRGB(25, 100, 150)
+end)
 
 local frame = Instance.new("Frame")
 frame.Name = "ShopFrame"
-frame.Size = UDim2.new(0, 400, 0, 420)
-frame.Position = UDim2.new(1, -420, 1, -490)
-frame.BackgroundColor3 = Color3.fromRGB(20, 30, 45)
+frame.Size = UDim2.new(0, 420, 0, 470)
+frame.Position = UDim2.new(1, -440, 1, -540)
+frame.BackgroundColor3 = Color3.fromRGB(16, 26, 40)
 frame.Visible = false
 frame.Parent = screenGui
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 14)
+
+local frameStroke = Instance.new("UIStroke")
+frameStroke.Color = Color3.fromRGB(60, 110, 150)
+frameStroke.Thickness = 1.5
+frameStroke.Transparency = 0.3
+frameStroke.Parent = frame
 
 toggleButton.MouseButton1Click:Connect(function()
 	frame.Visible = not frame.Visible
 end)
 
+-- Header: title + live Money readout.
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 50)
+header.BackgroundColor3 = Color3.fromRGB(22, 38, 58)
+header.Parent = frame
+Instance.new("UICorner", header).CornerRadius = UDim.new(0, 14)
+
+local headerFix = Instance.new("Frame") -- covers the bottom corners so only the top is rounded
+headerFix.Size = UDim2.new(1, 0, 0, 14)
+headerFix.Position = UDim2.new(0, 0, 1, -14)
+headerFix.BackgroundColor3 = Color3.fromRGB(22, 38, 58)
+headerFix.BorderSizePixel = 0
+headerFix.Parent = header
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+titleLabel.Position = UDim2.new(0, 16, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Text = "Shop"
+titleLabel.Parent = header
+
+local moneyLabel = Instance.new("TextLabel")
+moneyLabel.Size = UDim2.new(0.4, -16, 1, 0)
+moneyLabel.Position = UDim2.new(0.6, 0, 0, 0)
+moneyLabel.BackgroundTransparency = 1
+moneyLabel.Font = Enum.Font.GothamBold
+moneyLabel.TextSize = 18
+moneyLabel.TextXAlignment = Enum.TextXAlignment.Right
+moneyLabel.TextColor3 = Color3.fromRGB(120, 230, 150)
+moneyLabel.Text = "$0"
+moneyLabel.Parent = header
+
 -- Tabs
 local tabBar = Instance.new("Frame")
-tabBar.Size = UDim2.new(1, -20, 0, 34)
-tabBar.Position = UDim2.new(0, 10, 0, 8)
+tabBar.Size = UDim2.new(1, -20, 0, 36)
+tabBar.Position = UDim2.new(0, 10, 0, 58)
 tabBar.BackgroundTransparency = 1
 tabBar.Parent = frame
 
 local tabLayout = Instance.new("UIListLayout")
 tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 8)
+tabLayout.Padding = UDim.new(0, 6)
 tabLayout.Parent = tabBar
 
-local upgradesTabButton = Instance.new("TextButton")
-upgradesTabButton.Size = UDim2.new(0, 185, 1, 0)
-upgradesTabButton.Font = Enum.Font.GothamBold
-upgradesTabButton.TextSize = 16
-upgradesTabButton.Text = "Upgrades"
-upgradesTabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-upgradesTabButton.Parent = tabBar
-Instance.new("UICorner", upgradesTabButton).CornerRadius = UDim.new(0, 6)
+local TAB_NAMES = { "Upgrades", "Creatures", "Robux" }
+local tabButtons = {}
 
-local robuxTabButton = Instance.new("TextButton")
-robuxTabButton.Size = UDim2.new(0, 185, 1, 0)
-robuxTabButton.Font = Enum.Font.GothamBold
-robuxTabButton.TextSize = 16
-robuxTabButton.Text = "Robux Shop"
-robuxTabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-robuxTabButton.Parent = tabBar
-Instance.new("UICorner", robuxTabButton).CornerRadius = UDim.new(0, 6)
-
-local upgradesPage = Instance.new("ScrollingFrame")
-upgradesPage.Size = UDim2.new(1, -20, 1, -52)
-upgradesPage.Position = UDim2.new(0, 10, 0, 48)
-upgradesPage.BackgroundTransparency = 1
-upgradesPage.BorderSizePixel = 0
-upgradesPage.ScrollBarThickness = 6
-upgradesPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-upgradesPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
-upgradesPage.Parent = frame
-
-local upgradesLayout = Instance.new("UIListLayout")
-upgradesLayout.Padding = UDim.new(0, 8)
-upgradesLayout.SortOrder = Enum.SortOrder.LayoutOrder
-upgradesLayout.Parent = upgradesPage
-
-local robuxPage = Instance.new("ScrollingFrame")
-robuxPage.Size = UDim2.new(1, -20, 1, -52)
-robuxPage.Position = UDim2.new(0, 10, 0, 48)
-robuxPage.BackgroundTransparency = 1
-robuxPage.BorderSizePixel = 0
-robuxPage.ScrollBarThickness = 6
-robuxPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-robuxPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
-robuxPage.Visible = false
-robuxPage.Parent = frame
-
-local robuxLayout = Instance.new("UIListLayout")
-robuxLayout.Padding = UDim.new(0, 8)
-robuxLayout.SortOrder = Enum.SortOrder.LayoutOrder
-robuxLayout.Parent = robuxPage
-
-local function setActiveTab(name)
-	local upgradesActive = name == "Upgrades"
-	upgradesPage.Visible = upgradesActive
-	robuxPage.Visible = not upgradesActive
-	upgradesTabButton.BackgroundColor3 = upgradesActive and Color3.fromRGB(30, 90, 140) or Color3.fromRGB(40, 48, 60)
-	robuxTabButton.BackgroundColor3 = (not upgradesActive) and Color3.fromRGB(140, 100, 20) or Color3.fromRGB(40, 48, 60)
+for _, tabName in ipairs(TAB_NAMES) do
+	local tabButton = Instance.new("TextButton")
+	tabButton.Size = UDim2.new(0, 128, 1, 0)
+	tabButton.Font = Enum.Font.GothamBold
+	tabButton.TextSize = 15
+	tabButton.Text = tabName
+	tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	tabButton.AutoButtonColor = false
+	tabButton.Parent = tabBar
+	Instance.new("UICorner", tabButton).CornerRadius = UDim.new(0, 8)
+	tabButtons[tabName] = tabButton
 end
 
-upgradesTabButton.MouseButton1Click:Connect(function()
-	setActiveTab("Upgrades")
-end)
-robuxTabButton.MouseButton1Click:Connect(function()
-	setActiveTab("Robux")
-end)
+-- Pages
+local function createPage()
+	local page = Instance.new("ScrollingFrame")
+	page.Size = UDim2.new(1, -20, 1, -106)
+	page.Position = UDim2.new(0, 10, 0, 100)
+	page.BackgroundTransparency = 1
+	page.BorderSizePixel = 0
+	page.ScrollBarThickness = 6
+	page.ScrollBarImageColor3 = Color3.fromRGB(80, 140, 180)
+	page.CanvasSize = UDim2.new(0, 0, 0, 0)
+	page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	page.Visible = false
+	page.Parent = frame
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = page
+
+	return page
+end
+
+local upgradesPage = createPage()
+local creaturesPage = createPage()
+local robuxPage = createPage()
+local pages = { Upgrades = upgradesPage, Creatures = creaturesPage, Robux = robuxPage }
+
+local function setActiveTab(name)
+	for tabName, page in pairs(pages) do
+		page.Visible = tabName == name
+	end
+	for tabName, button in pairs(tabButtons) do
+		button.BackgroundColor3 = tabName == name and Color3.fromRGB(30, 110, 165) or Color3.fromRGB(35, 48, 68)
+	end
+end
+
+for tabName, button in pairs(tabButtons) do
+	button.MouseButton1Click:Connect(function()
+		setActiveTab(tabName)
+	end)
+end
 setActiveTab("Upgrades")
 
--- Upgrade rows
-local upgradeRows = {}
+-- Generic "card row" builder shared by all three tabs: an icon/swatch, a
+-- title + description, and a buy/status button on the right.
+local function createCard(parent, layoutOrder, accentColor)
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(1, 0, 0, 64)
+	card.BackgroundColor3 = Color3.fromRGB(26, 42, 62)
+	card.LayoutOrder = layoutOrder
+	card.Parent = parent
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 
-for i, key in ipairs(Config.UpgradeOrder) do
-	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 62)
-	row.BackgroundColor3 = Color3.fromRGB(35, 48, 68)
-	row.LayoutOrder = i
-	row.Parent = upgradesPage
-	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+	local accent = Instance.new("Frame")
+	accent.Size = UDim2.new(0, 4, 1, -16)
+	accent.Position = UDim2.new(0, 0, 0, 8)
+	accent.BackgroundColor3 = accentColor
+	accent.BorderSizePixel = 0
+	accent.Parent = card
+	Instance.new("UICorner", accent).CornerRadius = UDim.new(1, 0)
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(0.65, 0, 0, 22)
-	nameLabel.Position = UDim2.new(0, 10, 0, 4)
+	nameLabel.Size = UDim2.new(0.62, 0, 0, 22)
+	nameLabel.Position = UDim2.new(0, 16, 0, 8)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextSize = 16
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	nameLabel.Parent = row
+	nameLabel.Parent = card
 
 	local descLabel = Instance.new("TextLabel")
-	descLabel.Size = UDim2.new(0.65, 0, 0, 32)
-	descLabel.Position = UDim2.new(0, 10, 0, 24)
+	descLabel.Size = UDim2.new(0.62, 0, 0, 32)
+	descLabel.Position = UDim2.new(0, 16, 0, 28)
 	descLabel.BackgroundTransparency = 1
 	descLabel.Font = Enum.Font.Gotham
-	descLabel.TextSize = 13
+	descLabel.TextSize = 12
 	descLabel.TextWrapped = true
 	descLabel.TextXAlignment = Enum.TextXAlignment.Left
-	descLabel.TextColor3 = Color3.fromRGB(200, 210, 220)
-	descLabel.Parent = row
+	descLabel.TextColor3 = Color3.fromRGB(190, 205, 220)
+	descLabel.Parent = card
 
 	local buyButton = Instance.new("TextButton")
-	buyButton.Size = UDim2.new(0, 90, 0, 34)
-	buyButton.Position = UDim2.new(1, -100, 0.5, -17)
+	buyButton.Size = UDim2.new(0, 96, 0, 36)
+	buyButton.Position = UDim2.new(1, -108, 0.5, -18)
 	buyButton.Font = Enum.Font.GothamBold
-	buyButton.TextSize = 15
+	buyButton.TextSize = 14
 	buyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	buyButton.BackgroundColor3 = Color3.fromRGB(40, 140, 80)
-	buyButton.Parent = row
-	Instance.new("UICorner", buyButton).CornerRadius = UDim.new(0, 6)
+	buyButton.AutoButtonColor = false
+	buyButton.Parent = card
+	Instance.new("UICorner", buyButton).CornerRadius = UDim.new(0, 8)
+
+	return card, nameLabel, descLabel, buyButton
+end
+
+-- Upgrades tab
+local upgradeRows = {}
+
+for i, key in ipairs(Config.UpgradeOrder) do
+	local upgradeConfig = Config.Upgrades[key]
+	local _, nameLabel, descLabel, buyButton = createCard(upgradesPage, i, Color3.fromRGB(70, 160, 210))
+	descLabel.Text = upgradeConfig.Description
 
 	buyButton.MouseButton1Click:Connect(function()
 		PurchaseUpgradeEvent:FireServer(key)
 	end)
 
-	upgradeRows[key] = { name = nameLabel, desc = descLabel, buy = buyButton }
+	upgradeRows[key] = { name = nameLabel, buy = buyButton }
 end
 
 local upgradesFolder = player:WaitForChild("Upgrades")
@@ -3109,17 +3980,17 @@ local function refreshUpgradeRow(key)
 	local maxed = tier >= upgradeConfig.MaxTier
 
 	local row = upgradeRows[key]
-	row.name.Text = string.format("%s (Tier %d/%d)", upgradeConfig.Name, tier, upgradeConfig.MaxTier)
-	row.desc.Text = upgradeConfig.Description
+	local icon = UPGRADE_ICONS[key] or ""
+	row.name.Text = string.format("%s %s  (Tier %d/%d)", icon, upgradeConfig.Name, tier, upgradeConfig.MaxTier)
 
 	if maxed then
 		row.buy.Text = "MAXED"
-		row.buy.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		row.buy.BackgroundColor3 = Color3.fromRGB(60, 60, 68)
 	else
 		local cost = Config.UpgradeCost(key, tier)
 		row.buy.Text = "$" .. cost
 		local affordable = leaderstats.Money.Value >= cost
-		row.buy.BackgroundColor3 = affordable and Color3.fromRGB(40, 140, 80) or Color3.fromRGB(120, 60, 60)
+		row.buy.BackgroundColor3 = affordable and Color3.fromRGB(45, 155, 95) or Color3.fromRGB(130, 65, 65)
 	end
 end
 
@@ -3132,9 +4003,71 @@ end
 for _, key in ipairs(Config.UpgradeOrder) do
 	upgradesFolder[key]:GetPropertyChangedSignal("Value"):Connect(refreshAllUpgradeRows)
 end
-leaderstats.Money:GetPropertyChangedSignal("Value"):Connect(refreshAllUpgradeRows)
+
+-- Creatures tab
+local speciesFolder = player:WaitForChild("Species")
+local creatureRows = {}
+
+local layoutOrder = 0
+for _, key in ipairs(Config.SpeciesOrder) do
+	local species = Config.Species[key]
+	if species.ShopCost > 0 then
+		layoutOrder += 1
+		local previewColor = species.Tiers[1].Color
+		local _, nameLabel, descLabel, buyButton = createCard(creaturesPage, layoutOrder, previewColor)
+		nameLabel.Text = "🐬 " .. species.Name
+		descLabel.Text = "Unlock a whole new creature line to pick at the portal."
+
+		buyButton.MouseButton1Click:Connect(function()
+			PurchaseSpeciesEvent:FireServer(key)
+		end)
+
+		creatureRows[key] = { buy = buyButton }
+	end
+end
+
+local function refreshCreatureRow(key)
+	local species = Config.Species[key]
+	local row = creatureRows[key]
+	if not row then
+		return
+	end
+
+	local ownedValue = speciesFolder:FindFirstChild(key)
+	local owned = ownedValue and ownedValue.Value
+
+	if owned then
+		row.buy.Text = "Owned"
+		row.buy.BackgroundColor3 = Color3.fromRGB(60, 60, 68)
+	else
+		row.buy.Text = "$" .. species.ShopCost
+		local affordable = leaderstats.Money.Value >= species.ShopCost
+		row.buy.BackgroundColor3 = affordable and Color3.fromRGB(45, 155, 95) or Color3.fromRGB(130, 65, 65)
+	end
+end
+
+local function refreshAllCreatureRows()
+	for key in pairs(creatureRows) do
+		refreshCreatureRow(key)
+	end
+end
+
+for key in pairs(creatureRows) do
+	local ownedValue = speciesFolder:FindFirstChild(key)
+	if ownedValue then
+		ownedValue:GetPropertyChangedSignal("Value"):Connect(refreshAllCreatureRows)
+	end
+end
+
+leaderstats.Money:GetPropertyChangedSignal("Value"):Connect(function()
+	refreshAllUpgradeRows()
+	refreshAllCreatureRows()
+	moneyLabel.Text = "$" .. leaderstats.Money.Value
+end)
 
 refreshAllUpgradeRows()
+refreshAllCreatureRows()
+moneyLabel.Text = "$" .. leaderstats.Money.Value
 
 UpgradeResultEvent.OnClientEvent:Connect(function(success, reason)
 	if success then
@@ -3147,48 +4080,25 @@ UpgradeResultEvent.OnClientEvent:Connect(function(success, reason)
 	end)
 end)
 
--- Robux rows
+SpeciesResultEvent.OnClientEvent:Connect(function(success, reason)
+	if success then
+		return
+	end
+	local original = toggleButton.Text
+	toggleButton.Text = reason or "Can't buy"
+	task.delay(1.2, function()
+		toggleButton.Text = original
+	end)
+end)
+
+-- Robux tab
 for i, product in ipairs(Config.RobuxProducts) do
-	local row = Instance.new("Frame")
-	row.Size = UDim2.new(1, 0, 0, 68)
-	row.BackgroundColor3 = Color3.fromRGB(50, 42, 25)
-	row.LayoutOrder = i
-	row.Parent = robuxPage
-	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-
-	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(0.65, 0, 0, 22)
-	nameLabel.Position = UDim2.new(0, 10, 0, 4)
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Font = Enum.Font.GothamBold
-	nameLabel.TextSize = 16
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.TextColor3 = Color3.fromRGB(255, 220, 130)
+	local _, nameLabel, descLabel, buyButton = createCard(robuxPage, i, Color3.fromRGB(220, 180, 60))
 	nameLabel.Text = product.Name
-	nameLabel.Parent = row
-
-	local descLabel = Instance.new("TextLabel")
-	descLabel.Size = UDim2.new(0.65, 0, 0, 38)
-	descLabel.Position = UDim2.new(0, 10, 0, 24)
-	descLabel.BackgroundTransparency = 1
-	descLabel.Font = Enum.Font.Gotham
-	descLabel.TextSize = 13
-	descLabel.TextWrapped = true
-	descLabel.TextXAlignment = Enum.TextXAlignment.Left
-	descLabel.TextColor3 = Color3.fromRGB(210, 205, 190)
+	nameLabel.TextColor3 = Color3.fromRGB(255, 225, 150)
 	descLabel.Text = product.Description
-	descLabel.Parent = row
-
-	local buyButton = Instance.new("TextButton")
-	buyButton.Size = UDim2.new(0, 90, 0, 34)
-	buyButton.Position = UDim2.new(1, -100, 0.5, -17)
-	buyButton.Font = Enum.Font.GothamBold
-	buyButton.TextSize = 14
-	buyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-	buyButton.BackgroundColor3 = Color3.fromRGB(140, 100, 20)
 	buyButton.Text = product.DisplayPriceHint or "Buy"
-	buyButton.Parent = row
-	Instance.new("UICorner", buyButton).CornerRadius = UDim.new(0, 6)
+	buyButton.BackgroundColor3 = Color3.fromRGB(150, 110, 20)
 
 	buyButton.MouseButton1Click:Connect(function()
 		PromptRobuxPurchaseEvent:FireServer(product.Key)

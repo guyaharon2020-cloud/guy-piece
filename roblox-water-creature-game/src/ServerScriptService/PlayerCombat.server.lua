@@ -1,8 +1,9 @@
 -- Player-vs-player combat. Each evolution tier grants a different attack
--- (Config.EvolutionTiers[i].Attack) — this script always reads the
--- attacker's CURRENT Evolution tier live, off their leaderstats, every time
--- they attack. There's no cached "equipped attack" anywhere, so evolving
--- swaps your moveset on the very next attack with no extra bookkeeping.
+-- (Config.TierProgression[i].Attack, shared by every species) — this
+-- script always reads the attacker's CURRENT Evolution tier live, off their
+-- leaderstats, every time they attack. There's no cached "equipped attack"
+-- anywhere, so evolving swaps your moveset on the very next attack with no
+-- extra bookkeeping.
 --
 -- Fully server-authoritative: the client only ever requests an attack (no
 -- payload), and this script decides cooldown, targets, and damage. Damage
@@ -16,6 +17,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerUpgrades = require(ServerScriptService.Modules.PlayerUpgrades)
+local PlayerSpecies = require(ServerScriptService.Modules.PlayerSpecies)
 
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not Remotes then
@@ -47,9 +49,13 @@ end
 
 local function getAttackForPlayer(player)
 	local leaderstats = player:FindFirstChild("leaderstats")
-	local tierIndex = (leaderstats and leaderstats.Evolution.Value or 0) + 1
-	local tier = Config.EvolutionTiers[math.clamp(tierIndex, 1, #Config.EvolutionTiers)]
-	return tier.Attack, tier
+	local tierIndex = math.clamp((leaderstats and leaderstats.Evolution.Value or 0) + 1, 1, #Config.TierProgression)
+	local attack = Config.TierProgression[tierIndex].Attack
+
+	local species = Config.Species[PlayerSpecies.GetSelected(player)]
+	local finColor = species.Tiers[tierIndex].FinColor
+
+	return attack, finColor
 end
 
 AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
@@ -64,7 +70,7 @@ AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
 		return
 	end
 
-	local attack, tier = getAttackForPlayer(attackerPlayer)
+	local attack, finColor = getAttackForPlayer(attackerPlayer)
 	if not attack then
 		return
 	end
@@ -112,7 +118,7 @@ AttackEvent.OnServerEvent:Connect(function(attackerPlayer)
 		end
 	end
 
-	AttackFXEvent:FireAllClients(attackerRoot.Position, attack.Range, tier.FinColor)
+	AttackFXEvent:FireAllClients(attackerRoot.Position, attack.Range, finColor)
 end)
 
 Players.PlayerRemoving:Connect(function(player)

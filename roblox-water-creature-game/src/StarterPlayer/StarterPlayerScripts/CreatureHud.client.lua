@@ -108,9 +108,8 @@ local levelValue = leaderstats:WaitForChild("Level")
 local xpValue = leaderstats:WaitForChild("XP")
 
 local function refreshAttackLabel()
-	local tierIndex = math.clamp(evolutionValue.Value + 1, 1, #Config.EvolutionTiers)
-	local tier = Config.EvolutionTiers[tierIndex]
-	attackLabel.Text = "Attack (F): " .. tier.Attack.Name
+	local tierIndex = math.clamp(evolutionValue.Value + 1, 1, #Config.TierProgression)
+	attackLabel.Text = "Attack (F): " .. Config.TierProgression[tierIndex].Attack.Name
 end
 
 local function refreshXpBar()

@@ -238,7 +238,10 @@ local function addCannonBarrels(ship, hull)
 		barrel.Material = Enum.Material.Metal
 		barrel.Anchored = true
 		barrel.CanCollide = false
-		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, 0, math.rad(90))
+		-- A Cylinder's thin axis defaults to local X; rotating 90° about Y
+		-- (not Z — that would stand it upright instead) sends that axis to
+		-- world Z, pointing the barrel outward through the hull's side.
+		barrel.CFrame = hull.CFrame * CFrame.new(0, 1, side * (hull.Size.Z / 2 + 1)) * CFrame.Angles(0, math.rad(90), 0)
 		barrel.Parent = ship
 	end
 end
