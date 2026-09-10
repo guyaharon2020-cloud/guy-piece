@@ -54,7 +54,11 @@ time.
    curated **secret pets** (The Error, Void Frog, Mega Chicken, Unknown,
    ???) — discovering one announces to the whole server.
 8. Spend Coins/DNA/Mutations at the **Shop** on cosmetic trails, name
-   colors and emotes. Nothing in the shop is required to progress.
+   colors and emotes -- and, in the shop's **Animal Parts** section, buy a
+   *specific* Common–Mythic part with DNA to lock it into your next pet
+   instead of leaving that slot to the generator's random roll. Secret-tier
+   parts are never for sale, so the curated secret pets stay a real find.
+   Nothing in the shop is required to progress.
 
 ## Project structure
 
@@ -66,6 +70,7 @@ src/
     Mutations.lua                -- Giant/Rainbow/Glitched/etc. roll table
     Worlds.lua                   -- 5 worlds x 6 slots x parts-with-rarity
     SecretPets.lua                -- curated 6-part combos with special names
+    PartShop.lua                   -- DNA pricing for buying a specific part
     PetStats.lua                  -- slot list + stat computation
     PetBuilder.lua                 -- assembles a Model from primitive parts
     UpgradeDefs.lua / ShopItems.lua -- catalog data shared with the UI

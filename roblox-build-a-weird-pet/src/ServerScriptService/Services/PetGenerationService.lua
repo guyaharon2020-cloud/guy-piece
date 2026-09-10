@@ -11,6 +11,7 @@ local Worlds = require(Shared:WaitForChild("Worlds"))
 local Mutations = require(Shared:WaitForChild("Mutations"))
 local PetStats = require(Shared:WaitForChild("PetStats"))
 local SecretPets = require(Shared:WaitForChild("SecretPets"))
+local PartShop = require(Shared:WaitForChild("PartShop"))
 
 local DataService = require(script.Parent:WaitForChild("DataService"))
 local CollectionService = require(script.Parent:WaitForChild("CollectionService"))
@@ -91,6 +92,42 @@ local function onRequestPartRoll(player)
 	pushProfile(player)
 end
 
+-- Buying a specific part (Shop -> Animal Parts) fills just that one slot of
+-- the player's pending roll, same as if the generator had rolled it -- lets
+-- players lock in a part they want while still rolling/relying on luck for
+-- the rest.
+local function onBuyPart(player, partId)
+	local profile = DataService.Get(player)
+	if not profile or type(partId) ~= "string" then
+		return
+	end
+
+	local def = Worlds.PartById[partId]
+	if not def then
+		return
+	end
+	if not profile.WorldsUnlocked[def.worldId] then
+		pushProfile(player, { Error = "Unlock that world first" })
+		return
+	end
+	if not PartShop.isPurchasable(def) then
+		pushProfile(player, { Error = "That part can't be bought -- roll for it instead" })
+		return
+	end
+
+	local price = PartShop.priceFor(def)
+	if profile.DNA < price then
+		pushProfile(player, { Error = "Not enough DNA" })
+		return
+	end
+
+	profile.DNA -= price
+	profile.PendingParts = profile.PendingParts or {}
+	profile.PendingParts[def.slot] = def.id
+
+	pushProfile(player)
+end
+
 local function onCreatePet(player)
 	local profile = DataService.Get(player)
 	if not profile then
@@ -164,6 +201,7 @@ end
 
 function PetGenerationService.init()
 	Remotes.Event.RequestPartRoll.OnServerEvent:Connect(onRequestPartRoll)
+	Remotes.Event.BuyPart.OnServerEvent:Connect(onBuyPart)
 	Remotes.Event.CreatePet.OnServerEvent:Connect(onCreatePet)
 end
 

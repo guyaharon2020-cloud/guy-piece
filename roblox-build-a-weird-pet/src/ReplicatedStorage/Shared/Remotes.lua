@@ -21,6 +21,7 @@ local EVENT_NAMES = {
 	"BuyUpgrade",
 	"UnlockWorld",
 	"BuyShopItem",
+	"BuyPart",
 	"StartChallenge",
 }
 

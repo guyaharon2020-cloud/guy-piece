@@ -1,7 +1,7 @@
 <roblox xmlns:xmine="http://www.roblox.com/roblox" version="4">
 <External>null</External>
 <External>nil</External>
-<Item class="Workspace" referent="RBX41"><Properties><string name="Name">Workspace</string></Properties></Item><Item class="ReplicatedStorage" referent="RBX11"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX1"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX2"><Properties><string name="Name">Mutations</string><ProtectedString name="Source"><![CDATA[-- Mutations.lua
+<Item class="Workspace" referent="RBX42"><Properties><string name="Name">Workspace</string></Properties></Item><Item class="ReplicatedStorage" referent="RBX12"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX1"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX2"><Properties><string name="Name">Mutations</string><ProtectedString name="Source"><![CDATA[-- Mutations.lua
 -- Rare visual/stat modifiers that can be rolled onto any freshly created pet.
 
 local Mutations = {}
@@ -128,7 +128,36 @@ end
 
 return Mutations
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX3"><Properties><string name="Name">PetBuilder</string><ProtectedString name="Source"><![CDATA[-- PetBuilder.lua
+<Item class="ModuleScript" referent="RBX3"><Properties><string name="Name">PartShop</string><ProtectedString name="Source"><![CDATA[-- PartShop.lua
+-- Lets players buy a *specific* part outright (with DNA) instead of only
+-- getting random ones from the Part Generator, so they can deliberately
+-- chase a combo they have in mind. Secret-rarity parts are excluded on
+-- purpose -- those stay generator-only so the five curated secret pets
+-- keep feeling like a real discovery instead of a checkout item.
+
+local PartShop = {}
+
+PartShop.PriceByRarity = {
+	Common = 15,
+	Uncommon = 30,
+	Rare = 60,
+	Epic = 120,
+	Legendary = 250,
+	Mythic = 500,
+	-- Secret intentionally has no price: not purchasable.
+}
+
+function PartShop.isPurchasable(part)
+	return PartShop.PriceByRarity[part.rarity] ~= nil
+end
+
+function PartShop.priceFor(part)
+	return PartShop.PriceByRarity[part.rarity]
+end
+
+return PartShop
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX4"><Properties><string name="Name">PetBuilder</string><ProtectedString name="Source"><![CDATA[-- PetBuilder.lua
 -- Assembles a physical Model out of primitive BasePart shapes for a given
 -- part selection, so every one of the thousands of possible combinations is
 -- actually visually distinct in-game without needing custom meshes.
@@ -282,7 +311,7 @@ end
 
 return PetBuilder
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX4"><Properties><string name="Name">PetStats</string><ProtectedString name="Source"><![CDATA[-- PetStats.lua
+<Item class="ModuleScript" referent="RBX5"><Properties><string name="Name">PetStats</string><ProtectedString name="Source"><![CDATA[-- PetStats.lua
 -- Slot list + stat computation shared by server (authoritative) and client (previews).
 
 local Rarity = require(script.Parent:WaitForChild("Rarity"))
@@ -347,7 +376,7 @@ end
 
 return PetStats
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX5"><Properties><string name="Name">Rarity</string><ProtectedString name="Source"><![CDATA[-- Rarity.lua
+<Item class="ModuleScript" referent="RBX6"><Properties><string name="Name">Rarity</string><ProtectedString name="Source"><![CDATA[-- Rarity.lua
 -- Central definition of pet/part rarity tiers, ordered weakest to strongest.
 
 local Rarity = {}
@@ -422,7 +451,7 @@ end
 
 return Rarity
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX6"><Properties><string name="Name">Remotes</string><ProtectedString name="Source"><![CDATA[-- Remotes.lua
+<Item class="ModuleScript" referent="RBX7"><Properties><string name="Name">Remotes</string><ProtectedString name="Source"><![CDATA[-- Remotes.lua
 -- Single source of truth for every RemoteEvent/RemoteFunction the game uses.
 -- Require this from both server and client; it lazily creates the Instances
 -- under ReplicatedStorage.Remotes the first time it's required (server first).
@@ -445,6 +474,7 @@ local EVENT_NAMES = {
 	"BuyUpgrade",
 	"UnlockWorld",
 	"BuyShopItem",
+	"BuyPart",
 	"StartChallenge",
 }
 
@@ -485,7 +515,7 @@ end
 
 return Remotes
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX7"><Properties><string name="Name">SecretPets</string><ProtectedString name="Source"><![CDATA[-- SecretPets.lua
+<Item class="ModuleScript" referent="RBX8"><Properties><string name="Name">SecretPets</string><ProtectedString name="Source"><![CDATA[-- SecretPets.lua
 -- Curated, hand-picked six-part combinations that get a special name and a
 -- server-wide announcement instead of an auto-generated one. Discovering one
 -- of these should feel like winning the lottery.
@@ -575,7 +605,7 @@ end
 
 return SecretPets
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX8"><Properties><string name="Name">ShopItems</string><ProtectedString name="Source"><![CDATA[-- ShopItems.lua
+<Item class="ModuleScript" referent="RBX9"><Properties><string name="Name">ShopItems</string><ProtectedString name="Source"><![CDATA[-- ShopItems.lua
 -- Shared so both ShopService (validates purchases) and the client's Shop UI
 -- (renders the catalog) read the same data.
 
@@ -602,7 +632,7 @@ end
 
 return ShopItems
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX9"><Properties><string name="Name">UpgradeDefs</string><ProtectedString name="Source"><![CDATA[-- UpgradeDefs.lua
+<Item class="ModuleScript" referent="RBX10"><Properties><string name="Name">UpgradeDefs</string><ProtectedString name="Source"><![CDATA[-- UpgradeDefs.lua
 -- Shared so both UpgradeService (validates purchases) and the client's
 -- Upgrades UI (renders names/costs/descriptions) read the same data.
 
@@ -626,7 +656,7 @@ end
 
 return UpgradeDefs
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX10"><Properties><string name="Name">Worlds</string><ProtectedString name="Source"><![CDATA[-- Worlds.lua
+<Item class="ModuleScript" referent="RBX11"><Properties><string name="Name">Worlds</string><ProtectedString name="Source"><![CDATA[-- Worlds.lua
 -- Defines the 5 unlockable worlds and every creature part available in each.
 -- Kept data-only and declarative so designers can add parts without touching
 -- any service code.
@@ -929,13 +959,14 @@ Worlds.PartById = {}
 for _, world in ipairs(Worlds.List) do
 	for _, slotParts in pairs(world.parts) do
 		for _, p in ipairs(slotParts) do
+			p.worldId = world.id
 			Worlds.PartById[p.id] = p
 		end
 	end
 end
 
 return Worlds
-]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX25"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX12"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Main.server.lua
+]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX26"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX13"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Main.server.lua
 -- Bootstraps the whole server side of Build a Weird Pet: builds the map,
 -- initializes every service in dependency order, and wires player
 -- join/leave to data loading and pet-follow spawning.
@@ -994,7 +1025,7 @@ end
 
 print("[BuildAWeirdPet] Server initialized.")
 ]]></ProtectedString></Properties></Item>
-<Item class="Folder" referent="RBX13"><Properties><string name="Name">Services</string></Properties><Item class="ModuleScript" referent="RBX14"><Properties><string name="Name">ChallengeService</string><ProtectedString name="Source"><![CDATA[-- ChallengeService.lua
+<Item class="Folder" referent="RBX14"><Properties><string name="Name">Services</string></Properties><Item class="ModuleScript" referent="RBX15"><Properties><string name="Name">ChallengeService</string><ProtectedString name="Source"><![CDATA[-- ChallengeService.lua
 -- Server-authoritative scoring for the five pet minigames. Each challenge
 -- reads a relevant stat off the player's best equipped pet, rolls a bit of
 -- randomness on top, and pays out Coins/DNA scaled by lab multipliers.
@@ -1093,7 +1124,7 @@ end
 
 return ChallengeService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX15"><Properties><string name="Name">CollectionService</string><ProtectedString name="Source"><![CDATA[-- CollectionService.lua
+<Item class="ModuleScript" referent="RBX16"><Properties><string name="Name">CollectionService</string><ProtectedString name="Source"><![CDATA[-- CollectionService.lua
 -- Tracks which part-combinations a player has discovered (the Collection
 -- Book), grants milestone rewards, and handles secret-pet detection +
 -- server-wide announcements.
@@ -1163,7 +1194,7 @@ function CollectionService.init() end
 
 return CollectionService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX16"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- DataService.lua
+<Item class="ModuleScript" referent="RBX17"><Properties><string name="Name">DataService</string><ProtectedString name="Source"><![CDATA[-- DataService.lua
 -- Owns loading, caching, autosaving and saving player profiles.
 --
 -- NOTE: this uses a single UpdateAsync call per save/load with basic retry.
@@ -1339,7 +1370,7 @@ end)
 
 return DataService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX17"><Properties><string name="Name">InventoryService</string><ProtectedString name="Source"><![CDATA[-- InventoryService.lua
+<Item class="ModuleScript" referent="RBX18"><Properties><string name="Name">InventoryService</string><ProtectedString name="Source"><![CDATA[-- InventoryService.lua
 -- Equip/unequip/release logic plus storage & pet-slot capacity, both driven
 -- by lab upgrade levels.
 
@@ -1465,7 +1496,7 @@ end
 
 return InventoryService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX18"><Properties><string name="Name">PetFollowService</string><ProtectedString name="Source"><![CDATA[-- PetFollowService.lua
+<Item class="ModuleScript" referent="RBX19"><Properties><string name="Name">PetFollowService</string><ProtectedString name="Source"><![CDATA[-- PetFollowService.lua
 -- Server-authoritative: spawns/despawns physical pet models as players
 -- equip/unequip, and makes each player's equipped pets trail behind them
 -- in a fanned-out arc. Also drives the per-frame Rainbow/Glitch mutation
@@ -1627,7 +1658,7 @@ function PetFollowService.init() end
 
 return PetFollowService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX19"><Properties><string name="Name">PetGenerationService</string><ProtectedString name="Source"><![CDATA[-- PetGenerationService.lua
+<Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">PetGenerationService</string><ProtectedString name="Source"><![CDATA[-- PetGenerationService.lua
 -- Handles rolling random parts from the Part Generator and combining a
 -- player's currently-rolled parts into a finished pet.
 
@@ -1640,6 +1671,7 @@ local Worlds = require(Shared:WaitForChild("Worlds"))
 local Mutations = require(Shared:WaitForChild("Mutations"))
 local PetStats = require(Shared:WaitForChild("PetStats"))
 local SecretPets = require(Shared:WaitForChild("SecretPets"))
+local PartShop = require(Shared:WaitForChild("PartShop"))
 
 local DataService = require(script.Parent:WaitForChild("DataService"))
 local CollectionService = require(script.Parent:WaitForChild("CollectionService"))
@@ -1720,6 +1752,42 @@ local function onRequestPartRoll(player)
 	pushProfile(player)
 end
 
+-- Buying a specific part (Shop -> Animal Parts) fills just that one slot of
+-- the player's pending roll, same as if the generator had rolled it -- lets
+-- players lock in a part they want while still rolling/relying on luck for
+-- the rest.
+local function onBuyPart(player, partId)
+	local profile = DataService.Get(player)
+	if not profile or type(partId) ~= "string" then
+		return
+	end
+
+	local def = Worlds.PartById[partId]
+	if not def then
+		return
+	end
+	if not profile.WorldsUnlocked[def.worldId] then
+		pushProfile(player, { Error = "Unlock that world first" })
+		return
+	end
+	if not PartShop.isPurchasable(def) then
+		pushProfile(player, { Error = "That part can't be bought -- roll for it instead" })
+		return
+	end
+
+	local price = PartShop.priceFor(def)
+	if profile.DNA < price then
+		pushProfile(player, { Error = "Not enough DNA" })
+		return
+	end
+
+	profile.DNA -= price
+	profile.PendingParts = profile.PendingParts or {}
+	profile.PendingParts[def.slot] = def.id
+
+	pushProfile(player)
+end
+
 local function onCreatePet(player)
 	local profile = DataService.Get(player)
 	if not profile then
@@ -1793,12 +1861,13 @@ end
 
 function PetGenerationService.init()
 	Remotes.Event.RequestPartRoll.OnServerEvent:Connect(onRequestPartRoll)
+	Remotes.Event.BuyPart.OnServerEvent:Connect(onBuyPart)
 	Remotes.Event.CreatePet.OnServerEvent:Connect(onCreatePet)
 end
 
 return PetGenerationService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX20"><Properties><string name="Name">ShopService</string><ProtectedString name="Source"><![CDATA[-- ShopService.lua
+<Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">ShopService</string><ProtectedString name="Source"><![CDATA[-- ShopService.lua
 -- Purely cosmetic shop (trails, emotes, name colors) so the game stays
 -- fully playable without spending Robux. Buying an item immediately equips
 -- it -- owning a second item of the same type just swaps which is active.
@@ -1862,7 +1931,7 @@ end
 
 return ShopService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX21"><Properties><string name="Name">UpgradeService</string><ProtectedString name="Source"><![CDATA[-- UpgradeService.lua
+<Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">UpgradeService</string><ProtectedString name="Source"><![CDATA[-- UpgradeService.lua
 -- Lab upgrade tracks. Most effects (roll cost, luck, storage/slot caps) are
 -- read directly off profile.Upgrades[<key>] by the services that need them;
 -- this module owns validating purchases and the two multiplier helpers used
@@ -1937,7 +2006,7 @@ end
 
 return UpgradeService
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX22"><Properties><string name="Name">WorldService</string><ProtectedString name="Source"><![CDATA[-- WorldService.lua
+<Item class="ModuleScript" referent="RBX23"><Properties><string name="Name">WorldService</string><ProtectedString name="Source"><![CDATA[-- WorldService.lua
 -- Handles traveling to / unlocking worlds. Worlds must be unlocked in
 -- order (you can't skip to Volcano without unlocking Laboratory and Alien
 -- Planet first) so the part power curve stays meaningful.
@@ -2007,7 +2076,7 @@ end
 
 return WorldService
 ]]></ProtectedString></Properties></Item></Item>
-<Item class="Folder" referent="RBX23"><Properties><string name="Name">World</string></Properties><Item class="ModuleScript" referent="RBX24"><Properties><string name="Name">LabBuilder</string><ProtectedString name="Source"><![CDATA[-- LabBuilder.lua
+<Item class="Folder" referent="RBX24"><Properties><string name="Name">World</string></Properties><Item class="ModuleScript" referent="RBX25"><Properties><string name="Name">LabBuilder</string><ProtectedString name="Source"><![CDATA[-- LabBuilder.lua
 -- Procedurally builds the baseplate, laboratory hub, interaction stations
 -- and world portals. Everything interactive is a plain Part carrying a
 -- ProximityPrompt plus attributes the client's generic StationController
@@ -2233,7 +2302,7 @@ function LabBuilder.build()
 end
 
 return LabBuilder
-]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX40"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX39"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX26"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX27"><Properties><string name="Name">CosmeticsController</string><ProtectedString name="Source"><![CDATA[-- CosmeticsController.lua
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX41"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX40"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX27"><Properties><string name="Name">Client</string></Properties><Item class="ModuleScript" referent="RBX28"><Properties><string name="Name">CosmeticsController</string><ProtectedString name="Source"><![CDATA[-- CosmeticsController.lua
 -- Renders whatever cosmetics the player currently has equipped (Shop
 -- purchases): a Trail on the character, and a colored name tag. Re-applies
 -- on every respawn since Trails/Attachments live on the character model.
@@ -2356,7 +2425,7 @@ end)
 
 return CosmeticsController
 ]]></ProtectedString></Properties></Item>
-<Item class="LocalScript" referent="RBX28"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Main.client.lua
+<Item class="LocalScript" referent="RBX29"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Main.client.lua
 -- Boots the whole client: fetches the initial profile snapshot, builds the
 -- HUD + every panel, wires world stations/portals to actions, and keeps
 -- everything in sync with ProfileUpdated pushes from the server.
@@ -2482,7 +2551,7 @@ ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeringPlayer
 	end
 end)
 ]]></ProtectedString></Properties></Item>
-<Item class="Folder" referent="RBX29"><Properties><string name="Name">UI</string></Properties><Item class="ModuleScript" referent="RBX30"><Properties><string name="Name">CollectionPanel</string><ProtectedString name="Source"><![CDATA[-- CollectionPanel.lua
+<Item class="Folder" referent="RBX30"><Properties><string name="Name">UI</string></Properties><Item class="ModuleScript" referent="RBX31"><Properties><string name="Name">CollectionPanel</string><ProtectedString name="Source"><![CDATA[-- CollectionPanel.lua
 -- The Collection Book: every discovered part-combination, milestone
 -- progress, and rewards.
 
@@ -2585,7 +2654,7 @@ end
 
 return CollectionPanel
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX31"><Properties><string name="Name">GeneratorPanel</string><ProtectedString name="Source"><![CDATA[-- GeneratorPanel.lua
+<Item class="ModuleScript" referent="RBX32"><Properties><string name="Name">GeneratorPanel</string><ProtectedString name="Source"><![CDATA[-- GeneratorPanel.lua
 -- "Open the Part Generator, receive random creature parts, combine them
 -- into a pet." This panel is the heart of the game loop.
 
@@ -2692,7 +2761,7 @@ end
 
 return GeneratorPanel
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX32"><Properties><string name="Name">HUD</string><ProtectedString name="Source"><![CDATA[-- HUD.lua
+<Item class="ModuleScript" referent="RBX33"><Properties><string name="Name">HUD</string><ProtectedString name="Source"><![CDATA[-- HUD.lua
 -- Always-visible top currency bar + bottom navigation row. The nav buttons
 -- are a convenience mirror of the in-world stations (so players don't have
 -- to run back to the lab every time), which matters most on mobile.
@@ -2812,7 +2881,7 @@ end
 
 return HUD
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX33"><Properties><string name="Name">InventoryPanel</string><ProtectedString name="Source"><![CDATA[-- InventoryPanel.lua
+<Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">InventoryPanel</string><ProtectedString name="Source"><![CDATA[-- InventoryPanel.lua
 -- Lists every owned pet: thumbnail-less card with name, rarity, mutation,
 -- stats and equip status, per the brief's "Pet Inventory" spec.
 
@@ -2950,7 +3019,7 @@ end
 
 return InventoryPanel
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX34"><Properties><string name="Name">PanelBase</string><ProtectedString name="Source"><![CDATA[-- PanelBase.lua
+<Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">PanelBase</string><ProtectedString name="Source"><![CDATA[-- PanelBase.lua
 -- Builds the common "titled scrollable panel" shell every UI panel uses:
 -- a centered frame with a title bar + close button and a ScrollingFrame
 -- body. Panels only need to fill in the body content.
@@ -3045,13 +3114,21 @@ end
 
 return PanelBase
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX35"><Properties><string name="Name">ShopPanel</string><ProtectedString name="Source"><![CDATA[-- ShopPanel.lua
--- Cosmetic shop: trails, name colors, emotes. Everything here is optional
--- flair paid for with in-game currency -- no Robux required to progress.
+<Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">ShopPanel</string><ProtectedString name="Source"><![CDATA[-- ShopPanel.lua
+-- Two sections: the cosmetic shop (trails, name colors, emotes -- optional
+-- flair, no Robux required to progress) and Animal Parts, where players can
+-- buy a specific part outright with DNA instead of leaving it to the Part
+-- Generator's random roll. Animal Parts only lists the current world's
+-- pool (same pool the generator rolls from) and never includes Secret-tier
+-- parts -- those stay generator-only.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShopItems = require(Shared:WaitForChild("ShopItems"))
+local Worlds = require(Shared:WaitForChild("Worlds"))
+local Rarity = require(Shared:WaitForChild("Rarity"))
+local PetStats = require(Shared:WaitForChild("PetStats"))
+local PartShop = require(Shared:WaitForChild("PartShop"))
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
 local Theme = require(script.Parent:WaitForChild("Theme"))
@@ -3059,16 +3136,32 @@ local PanelBase = require(script.Parent:WaitForChild("PanelBase"))
 
 local ShopPanel = {}
 
+local function sectionHeader(text, order)
+	return Theme.label({
+		Text = text,
+		Size = UDim2.new(1, 0, 0, 26),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = Theme.Colors.Accent,
+		TextSize = 18,
+		LayoutOrder = order,
+	})
+end
+
 function ShopPanel.new(screenGui)
-	local base = PanelBase.new(screenGui, "Shop", UDim2.new(0, 480, 0, 520))
+	local base = PanelBase.new(screenGui, "Shop", UDim2.new(0, 480, 0, 560))
 	local panel = { base = base }
 
 	function panel.refresh(state)
 		base:clear()
 		local owned = state.ShopItemsOwned or {}
 		local equipped = state.EquippedCosmetics or {}
+		local order = 1
 
-		for order, item in ipairs(ShopItems.List) do
+		local cosmeticsHeader = sectionHeader("Cosmetics", order)
+		cosmeticsHeader.Parent = base.body
+		order += 1
+
+		for _, item in ipairs(ShopItems.List) do
 			local row = Theme.frame({
 				Size = UDim2.new(1, 0, 0, 64),
 				BackgroundColor3 = Theme.Colors.PanelLight,
@@ -3077,6 +3170,7 @@ function ShopPanel.new(screenGui)
 			Theme.corner(row, 10)
 			Theme.padding(row, 8)
 			row.Parent = base.body
+			order += 1
 
 			local nameLabel = Theme.label({
 				Text = item.name .. " (" .. item.type .. ")",
@@ -3115,6 +3209,60 @@ function ShopPanel.new(screenGui)
 				end
 			end)
 		end
+
+		local world = Worlds.get(state.CurrentWorld) or Worlds.List[1]
+		local partsHeader = sectionHeader("Animal Parts -- " .. world.name, order)
+		partsHeader.Parent = base.body
+		order += 1
+
+		local hintLabel = Theme.label({
+			Text = "Buy a specific part with DNA to lock it in for your next pet. Travel to a different world portal to shop its parts.",
+			Size = UDim2.new(1, 0, 0, 32),
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextColor3 = Theme.Colors.SubText,
+			TextSize = 12,
+			LayoutOrder = order,
+		})
+		hintLabel.Parent = base.body
+		order += 1
+
+		for _, slot in ipairs(PetStats.Slots) do
+			for _, def in ipairs(world.parts[slot]) do
+				if PartShop.isPurchasable(def) then
+					local row = Theme.frame({
+						Size = UDim2.new(1, 0, 0, 56),
+						BackgroundColor3 = Theme.Colors.PanelLight,
+						LayoutOrder = order,
+					})
+					Theme.corner(row, 10)
+					Theme.padding(row, 8)
+					row.Parent = base.body
+					order += 1
+
+					local nameLabel = Theme.label({
+						Text = ("%s [%s] -- %s"):format(def.name, def.rarity, slot),
+						Size = UDim2.new(1, -100, 1, 0),
+						TextXAlignment = Enum.TextXAlignment.Left,
+						TextColor3 = Theme.rarityColor(Rarity, def.rarity),
+						TextSize = 15,
+					})
+					nameLabel.Parent = row
+
+					local buyButton = Theme.button({
+						Text = PartShop.priceFor(def) .. " DNA",
+						Size = UDim2.new(0, 90, 0, 40),
+						Position = UDim2.new(1, -90, 0.5, 0),
+						AnchorPoint = Vector2.new(0, 0.5),
+						TextSize = 13,
+					})
+					buyButton.Parent = row
+					buyButton.MouseButton1Click:Connect(function()
+						Remotes.Event.BuyPart:FireServer(def.id)
+					end)
+				end
+			end
+		end
 	end
 
 	return panel
@@ -3122,7 +3270,7 @@ end
 
 return ShopPanel
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX36"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Theme.lua
+<Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">Theme</string><ProtectedString name="Source"><![CDATA[-- Theme.lua
 -- Small shared style + widget-factory helpers so every panel script stays
 -- short instead of re-typing UICorner/UIStroke boilerplate everywhere.
 
@@ -3223,7 +3371,7 @@ end
 
 return Theme
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX37"><Properties><string name="Name">Toast</string><ProtectedString name="Source"><![CDATA[-- Toast.lua
+<Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">Toast</string><ProtectedString name="Source"><![CDATA[-- Toast.lua
 -- Small floating notifications stacked in the top-right corner: pet
 -- discoveries, milestone rewards, secret pet announcements, challenge
 -- results, and error messages from the server.
@@ -3299,7 +3447,7 @@ end
 
 return Toast
 ]]></ProtectedString></Properties></Item>
-<Item class="ModuleScript" referent="RBX38"><Properties><string name="Name">UpgradesPanel</string><ProtectedString name="Source"><![CDATA[-- UpgradesPanel.lua
+<Item class="ModuleScript" referent="RBX39"><Properties><string name="Name">UpgradesPanel</string><ProtectedString name="Source"><![CDATA[-- UpgradesPanel.lua
 -- Laboratory upgrades: Part Generator, Storage, Luck, Pet Slots, DNA
 -- Multiplier, Coin Multiplier.
 

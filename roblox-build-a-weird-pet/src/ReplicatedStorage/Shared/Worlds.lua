@@ -301,6 +301,7 @@ Worlds.PartById = {}
 for _, world in ipairs(Worlds.List) do
 	for _, slotParts in pairs(world.parts) do
 		for _, p in ipairs(slotParts) do
+			p.worldId = world.id
 			Worlds.PartById[p.id] = p
 		end
 	end
