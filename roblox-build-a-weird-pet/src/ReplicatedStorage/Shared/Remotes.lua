@@ -17,6 +17,7 @@ local EVENT_NAMES = {
 	"CreatePet",
 	"EquipPet",
 	"UnequipPet",
+	"ReleasePet",
 	"BuyUpgrade",
 	"UnlockWorld",
 	"BuyShopItem",

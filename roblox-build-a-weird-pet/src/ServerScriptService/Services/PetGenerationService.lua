@@ -14,6 +14,7 @@ local SecretPets = require(Shared:WaitForChild("SecretPets"))
 
 local DataService = require(script.Parent:WaitForChild("DataService"))
 local CollectionService = require(script.Parent:WaitForChild("CollectionService"))
+local InventoryService = require(script.Parent:WaitForChild("InventoryService"))
 
 local PetGenerationService = {}
 
@@ -97,6 +98,10 @@ local function onCreatePet(player)
 	end
 	local pending = profile.PendingParts
 	if not pending then
+		return
+	end
+	if not InventoryService.canAddPet(profile) then
+		pushProfile(player, { Error = "Inventory full -- upgrade Storage or release a pet" })
 		return
 	end
 
