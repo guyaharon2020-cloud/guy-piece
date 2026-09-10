@@ -34,12 +34,18 @@ function CollectionService.RegisterDiscovery(player, petRecord)
 	local milestoneHit = nil
 
 	if isNewDiscovery then
-		profile.DiscoveredCombinations[comboId] = true
+		-- Store the name (not just `true`) so the Collection Book UI can list
+		-- what was discovered, not just a count.
+		profile.DiscoveredCombinations[comboId] = petRecord.name
 		profile.DiscoveredCount += 1
 
 		for _, milestone in ipairs(MILESTONES) do
-			if profile.DiscoveredCount >= milestone and not profile.MilestonesClaimed[milestone] then
-				profile.MilestonesClaimed[milestone] = true
+			-- Keyed by string, not number: DataStores silently turn sparse
+			-- numeric-keyed table keys into strings on save/load, so a
+			-- numeric key here would stop matching after a server restart.
+			local milestoneKey = tostring(milestone)
+			if profile.DiscoveredCount >= milestone and not profile.MilestonesClaimed[milestoneKey] then
+				profile.MilestonesClaimed[milestoneKey] = true
 				local coinReward, dnaReward = milestoneReward(milestone)
 				profile.Coins += coinReward
 				profile.DNA += dnaReward

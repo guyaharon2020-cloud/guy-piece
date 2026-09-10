@@ -8,10 +8,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Remotes = require(Shared:WaitForChild("Remotes"))
 
-local LabBuilder = require(script.Parent.World:WaitForChild("LabBuilder"))
+local LabBuilder = require(script.Parent:WaitForChild("World"):WaitForChild("LabBuilder"))
 LabBuilder.build()
 
-local Services = script.Parent.Services
+local Services = script.Parent:WaitForChild("Services")
 local DataService = require(Services:WaitForChild("DataService"))
 local CollectionService = require(Services:WaitForChild("CollectionService"))
 local InventoryService = require(Services:WaitForChild("InventoryService"))

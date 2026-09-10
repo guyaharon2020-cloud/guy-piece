@@ -127,7 +127,10 @@ local function onCreatePet(player)
 		partIds[slot] = def.id
 	end
 
-	local petId = tostring(profile.NextPetId)
+	-- Prefixed (not a bare numeric string) so DataStore's array/dictionary
+	-- encoding never has ambiguous sequential-integer-looking keys to guess
+	-- at across a save/load round trip.
+	local petId = "pet_" .. profile.NextPetId
 	profile.NextPetId += 1
 
 	local record = {
@@ -151,7 +154,12 @@ local function onCreatePet(player)
 
 	CollectionService.RegisterDiscovery(player, record)
 
-	pushProfile(player, { NewPet = record })
+	pushProfile(player, {
+		NewPet = record,
+		DiscoveredCombinations = profile.DiscoveredCombinations,
+		DiscoveredCount = profile.DiscoveredCount,
+		MilestonesClaimed = profile.MilestonesClaimed,
+	})
 end
 
 function PetGenerationService.init()
