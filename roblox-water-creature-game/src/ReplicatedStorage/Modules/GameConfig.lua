@@ -66,35 +66,46 @@ Config.LevelsPerEvolution = 12
 --   Type = "melee"    single target in front, within Range and ConeAngle
 --   Type = "dash"     lunge forward (DashSpeed) + melee hit during the dash
 --   Type = "aoe"      damages every other player within Range, all around
+--
+-- Each tier's Body is a distinct fish-shaped model (see
+-- CreatureAppearance.lua) — Length/Width/Height/SnoutLength in studs before
+-- the level/evolution size multiplier is applied on top. HasTeeth/HasSpikes
+-- add small extra features on top of the base shape.
 Config.EvolutionTiers = {
 	{
 		Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150),
 		FinScale = 1.0, SpeedBonus = 0, SizeBonus = 0,
+		Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 },
 		Attack = { Name = "Nibble", Type = "melee", Range = 8, ConeAngle = 80, Damage = 8, Cooldown = 1.2 },
 	},
 	{
 		Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140),
 		FinScale = 1.15, SpeedBonus = 10, SizeBonus = 0.15,
+		Body = { Length = 5.5, Width = 1.1, Height = 1.0, SnoutLength = 1.3 },
 		Attack = { Name = "Lunge Strike", Type = "dash", Range = 20, ConeAngle = 50, DashSpeed = 90, Damage = 12, Cooldown = 2.5 },
 	},
 	{
 		Name = "Reef Shark", Color = Color3.fromRGB(100, 115, 130), FinColor = Color3.fromRGB(55, 65, 78),
 		FinScale = 1.3, SpeedBonus = 20, SizeBonus = 0.3,
+		Body = { Length = 6, Width = 1.7, Height = 1.5, SnoutLength = 1.2 },
 		Attack = { Name = "Spin Bite", Type = "aoe", Range = 12, Damage = 14, Cooldown = 2.2 },
 	},
 	{
 		Name = "Great White", Color = Color3.fromRGB(160, 168, 176), FinColor = Color3.fromRGB(75, 80, 90),
 		FinScale = 1.5, SpeedBonus = 32, SizeBonus = 0.5,
+		Body = { Length = 7.5, Width = 2.1, Height = 1.9, SnoutLength = 1.5 },
 		Attack = { Name = "Crushing Jaws", Type = "melee", Range = 10, ConeAngle = 60, Damage = 24, Cooldown = 2.8 },
 	},
 	{
 		Name = "Megalodon", Color = Color3.fromRGB(55, 60, 75), FinColor = Color3.fromRGB(18, 20, 28),
 		FinScale = 1.8, SpeedBonus = 46, SizeBonus = 0.8,
+		Body = { Length = 9.5, Width = 2.6, Height = 2.3, SnoutLength = 1.8, HasTeeth = true },
 		Attack = { Name = "Tidal Slam", Type = "aoe", Range = 18, Damage = 22, Cooldown = 3.5 },
 	},
 	{
 		Name = "Leviathan", Color = Color3.fromRGB(25, 195, 160), FinColor = Color3.fromRGB(10, 255, 200),
 		FinScale = 2.2, SpeedBonus = 65, SizeBonus = 1.2,
+		Body = { Length = 11.5, Width = 3.1, Height = 2.7, SnoutLength = 2.1, HasTeeth = true, HasSpikes = true },
 		Attack = { Name = "Abyssal Roar", Type = "aoe", Range = 26, Damage = 32, Cooldown = 4.5 },
 	},
 }

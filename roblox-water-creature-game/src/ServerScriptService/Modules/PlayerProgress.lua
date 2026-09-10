@@ -57,9 +57,11 @@ function PlayerProgress.Init(player)
 end
 
 -- Recomputes the creature's Humanoid stats from scratch (evolution tier +
--- level + shop upgrades combined) and applies them. Call this after a
--- level-up, evolution, or shop purchase — it's cheap and idempotent, so no
--- need to track deltas.
+-- level + shop upgrades combined) and applies them, and rebuilds the fish
+-- body to match (CreatureAppearance.Apply computes its own scale the same
+-- way, so it always stays in sync with whatever this just set). Call this
+-- after a level-up, evolution, or shop purchase — it's cheap and
+-- idempotent, so no need to track deltas.
 function PlayerProgress.ApplyLevelStats(player)
 	local character = player.Character
 	local leaderstats = player:FindFirstChild("leaderstats")
@@ -83,10 +85,7 @@ function PlayerProgress.ApplyLevelStats(player)
 	humanoid.MaxHealth = newMaxHealth
 	humanoid.Health = math.min(newMaxHealth, humanoid.Health + math.max(0, newMaxHealth - previousMaxHealth))
 
-	local scale = 1 + (level - 1) * Config.SizePerLevel + tier.SizeBonus
-	pcall(function()
-		character:ScaleTo(scale)
-	end)
+	CreatureAppearance.Apply(player)
 end
 
 -- Called when a player's creature destroys a raft or sinks a ship.
@@ -145,10 +144,9 @@ function PlayerProgress.AwardHumansDestroyed(player, humanCount)
 	end
 
 	if leveledUp then
+		-- Also rebuilds the fish body (see ApplyLevelStats), covering the
+		-- evolved case too — evolving always sets leveledUp as well.
 		PlayerProgress.ApplyLevelStats(player)
-	end
-	if evolved then
-		CreatureAppearance.Apply(player)
 	end
 
 	NotifyEvent:FireClient(player, {

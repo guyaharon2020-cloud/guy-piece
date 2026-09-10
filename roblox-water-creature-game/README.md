@@ -19,25 +19,35 @@ moment you touch it.
 
 ## Your fish
 
-The default Roblox avatar is recolored (countershaded — darker on top,
-lighter belly, like a real fish) and given a forked tail, dorsal fin, two
-side fins, and small eyes, all built from primitive Parts — no custom mesh
-upload was available from here, so this is the closest a script alone can
-get to "looks like a fish." It works on both R6 and R15 avatars (fins/eyes
-weld to whichever torso/head the rig has); on a rig where `Model:ScaleTo`
-doesn't apply cleanly, the recolor and fins still show, only the
-evolution/level size growth is skipped for that player (logged as a
-warning, not an error). Color, fin size, and (at the final tier) a soft
-glow all change with your evolution tier:
+Each evolution tier has its own distinct fish-shaped body model, not just a
+recolored human silhouette with fins bolted on. The default avatar's own
+parts (head, torso, arms, legs) are made fully invisible but stay
+physically in place — movement, swimming, and collision are completely
+untouched — and a separate model, welded to the (now invisible) torso, is
+what's actually rendered: a tapered ellipsoid body with a countershaded
+belly, a pointed snout, a forked tail, a dorsal fin, two pectoral fins,
+eyes, and — on the bigger tiers — teeth or back spikes. All built from
+primitive Parts (`CreatureAppearance.lua`); no custom mesh upload was
+available from here, so this is the closest a script alone can get to
+"looks like a fish." It works on both R6 and R15 avatars (the body welds to
+whichever torso the rig has); on a rig where `Model:ScaleTo` doesn't apply
+cleanly to the (invisible, physical) collision size, the fish model still
+shows at full size, only the *collision hitbox* growth is skipped for that
+player (logged as a warning, not an error). Size, shape, color, and (on the
+final tier) a soft glow all change with your evolution tier:
 
-| Evolution tier | Level range | Look |
-|---|---|---|
-| 0 — Minnow | 1–11 | light blue, small fins |
-| 1 — Barracuda | 1–11 (after reset) | deeper blue, bigger fins, +speed |
-| 2 — Reef Shark | 1–11 | gray, bigger still |
-| 3 — Great White | 1–11 | pale gray, bigger |
-| 4 — Megalodon | 1–11 | near-black, huge |
-| 5 — Leviathan | 1–50 (final tier, no more resets) | teal/gold shimmer, biggest and fastest |
+| Evolution tier | Level range | Body | Look |
+|---|---|---|---|
+| 0 — Minnow | 1–11 | small, stubby | light blue, small fins |
+| 1 — Barracuda | 1–11 (after reset) | long and sleek | deeper blue, bigger fins, +speed |
+| 2 — Reef Shark | 1–11 | broader, shark-shaped | gray |
+| 3 — Great White | 1–11 | bigger shark | pale gray |
+| 4 — Megalodon | 1–11 | huge, toothy | near-black |
+| 5 — Leviathan | 1–50 (final tier, no more resets) | biggest, spiked | teal/gold shimmer, glowing |
+
+The fish body is rebuilt (and resized) on every level-up, shop purchase,
+and respawn — not just at evolution — so growth is smooth throughout, not
+just a jump at each evolution boundary.
 
 Evolving happens on the level-up that would otherwise take you to level
 `LevelsPerEvolution` (12 by default) — using the same normal per-level XP
@@ -220,8 +230,8 @@ professional art team.
   upgrade tiers, purchase logic, damage-reduction/multiplier math
 - `src/ServerScriptService/Modules/RobuxShop.lua` — Developer Product
   catalog handling, `ProcessReceipt`, granting super powers
-- `src/ServerScriptService/Modules/CreatureAppearance.lua` — builds the fish
-  look (recolor + welded fins) per evolution tier
+- `src/ServerScriptService/Modules/CreatureAppearance.lua` — hides the
+  default avatar and builds a distinct fish body model per evolution tier
 - `src/ServerScriptService/ShopHandler.server.lua` — validates/applies both
   shops' purchase requests from the client
 - `src/ServerScriptService/GameManager.server.lua` — wires player join/leave
@@ -295,6 +305,7 @@ All gameplay tuning lives in `GameConfig.lua`:
 | `BarrierThickness`, `BarrierHeight` | the sand wall around the play area |
 | `SkySpawnHeight`, `SkySpawnPlatformSize`, `SkySpawnPortalOffset` | the sky spawn platform + portal |
 | `EvolutionTiers[i].Attack` | each tier's attack — type, range, damage, cooldown |
+| `EvolutionTiers[i].Body` | each tier's fish body — length/width/height/snout, teeth/spikes |
 | `PvPSafeZoneY` | how high up the sky-spawn safe zone extends |
 | `ShipTypes[i].MastCount`, `.SailColor` | how many masts/sails each ship type gets |
 
@@ -302,13 +313,14 @@ All gameplay tuning lives in `GameConfig.lua`:
 
 - If a ship sinks from hits landed by more than one player, the final hit
   gets full credit for the reward (no split-credit system yet).
-- Fin/eye placement falls back from `UpperTorso` (R15) to `Torso` (R6), and
-  uses `Head` either way, so it works on both rig types.
-- There's no scripted way to force everyone onto R15 — that's a place-level
-  setting only, in Studio's Game Settings → Avatar tab (Home → Game
-  Settings), not something a Script can set. Not needed for the game to
-  work, but if you want every player on R15 for consistent look/scaling,
-  set it there once, in Studio, on the published place.
+- The fish body welds to `UpperTorso` (R15) or falls back to `Torso` (R6),
+  so it works on both rig types. There's no scripted way to force everyone
+  onto R15 — that's a place-level setting only, in Studio's Game Settings →
+  Avatar tab (Home → Game Settings), not something a Script can set. Not
+  needed for the game to work (the fish model itself always shows at full
+  size regardless of rig type), but if you want every player's underlying
+  *collision hitbox* to scale identically too, set it there once, in
+  Studio, on the published place.
 - The map barrier is a square sand frame matching the water block's own
   footprint (not a circle), so there are no corner gaps to sneak through.
 - `Workspace.FallenPartsDestroyHeight` isn't set anymore — writing it threw
