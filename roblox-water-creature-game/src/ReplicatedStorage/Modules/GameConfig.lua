@@ -89,7 +89,7 @@ Config.TierProgression = {
 -- by CreatureAppearance.lua according to BodyStyle:
 --   "cubie"        the Cubie Fish's cube body + pixel skin (Fish)
 --   "streamlined"  elongated body + pointed snout + forked tail (Dolphin)
---   "serpentine"   upright curled body + long snout + coiled tail (Sea Horse)
+--   "turtle"       domed shell + belly + head + paddling flippers (Sea Turtle)
 -- ShopCost = 0 means it's a free starter, choosable at the portal
 -- (SkySpawn.server.lua). ShopCost > 0 means it must be bought first (see
 -- PlayerSpecies.lua / the shop's Creatures tab) before it can be selected.
@@ -121,23 +121,27 @@ Config.Species = {
 				Body = { Length = 11.5, Width = 3.1, Height = 2.7, SnoutLength = 2.1, HasTeeth = true, HasSpikes = true } },
 		},
 	},
-	SeaHorse = {
-		Name = "Sea Horse",
+	Turtle = {
+		Name = "Sea Turtle",
 		ShopCost = 0,
-		BodyStyle = "serpentine",
+		-- "turtle" = built from Parts using SeaTurtleShape.lua (shape and
+		-- colors measured from the Meshy AI turtle model). Only Body.Length
+		-- (head to tail) and HasSpikes apply; Color is the portal-menu swatch
+		-- and FinColor the attack effect / spike color.
+		BodyStyle = "turtle",
 		Tiers = {
-			{ Name = "Hatchling Seahorse", Color = Color3.fromRGB(230, 210, 140), FinColor = Color3.fromRGB(200, 170, 100), FinScale = 1.0,
-				Body = { Height = 2.2, Width = 0.7, SnoutLength = 0.6, TailSegments = 3 } },
-			{ Name = "Common Seahorse", Color = Color3.fromRGB(210, 150, 80), FinColor = Color3.fromRGB(180, 120, 60), FinScale = 1.1,
-				Body = { Height = 3.2, Width = 0.85, SnoutLength = 0.9, TailSegments = 4 } },
-			{ Name = "Spiny Seahorse", Color = Color3.fromRGB(140, 90, 160), FinColor = Color3.fromRGB(110, 60, 130), FinScale = 1.2,
-				Body = { Height = 4, Width = 1.0, SnoutLength = 1.1, TailSegments = 4, HasSpines = true } },
-			{ Name = "Pygmy Dragon", Color = Color3.fromRGB(90, 170, 110), FinColor = Color3.fromRGB(60, 140, 80), FinScale = 1.35,
-				Body = { Height = 4.8, Width = 1.2, SnoutLength = 1.3, TailSegments = 5, HasSpines = true } },
-			{ Name = "Weedy Seadragon", Color = Color3.fromRGB(180, 140, 60), FinColor = Color3.fromRGB(140, 100, 40), FinScale = 1.55,
-				Body = { Height = 5.8, Width = 1.4, SnoutLength = 1.6, TailSegments = 5, HasSpines = true } },
-			{ Name = "Kraken Seahorse", Color = Color3.fromRGB(40, 200, 190), FinColor = Color3.fromRGB(20, 255, 230), FinScale = 1.8,
-				Body = { Height = 7, Width = 1.7, SnoutLength = 1.9, TailSegments = 6, HasSpines = true } },
+			{ Name = "Hatchling Turtle", Color = Color3.fromRGB(59, 65, 26), FinColor = Color3.fromRGB(80, 83, 41),
+				Body = { Length = 4 } },
+			{ Name = "Green Turtle", Color = Color3.fromRGB(59, 65, 26), FinColor = Color3.fromRGB(90, 150, 70),
+				Body = { Length = 5.5 } },
+			{ Name = "Loggerhead", Color = Color3.fromRGB(59, 65, 26), FinColor = Color3.fromRGB(180, 120, 60),
+				Body = { Length = 6.5 } },
+			{ Name = "Leatherback", Color = Color3.fromRGB(59, 65, 26), FinColor = Color3.fromRGB(60, 70, 90),
+				Body = { Length = 8 } },
+			{ Name = "Dragon Turtle", Color = Color3.fromRGB(59, 65, 26), FinColor = Color3.fromRGB(220, 60, 40),
+				Body = { Length = 10 } },
+			{ Name = "Ancient Titan Turtle", Color = Color3.fromRGB(59, 65, 26), FinColor = Color3.fromRGB(20, 255, 200),
+				Body = { Length = 12, HasSpikes = true } },
 		},
 	},
 	Dolphin = {
@@ -160,8 +164,8 @@ Config.Species = {
 		},
 	},
 }
-Config.SpeciesOrder = { "Fish", "SeaHorse", "Dolphin" }
-Config.StarterSpecies = { "Fish", "SeaHorse" } -- free, choosable at the portal
+Config.SpeciesOrder = { "Fish", "Turtle", "Dolphin" }
+Config.StarterSpecies = { "Fish", "Turtle" } -- free, choosable at the portal
 Config.DefaultSpecies = "Fish"
 
 -- Players above this Y (i.e. still on/near the sky spawn platform) can

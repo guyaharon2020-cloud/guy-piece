@@ -1,18 +1,18 @@
 -- Builds an actual creature-shaped body for the player, distinct per
 -- species (see Config.Species) and evolution tier, instead of just fins
 -- bolted onto the default human silhouette. Built from primitive Parts —
--- the Cubie Fish too, from a blueprint of its own 3D model — except that a
--- species with a `CustomModel` uses that imported mesh instead, if it's
--- been imported into the place.
+-- the Cubie Fish and Sea Turtle from measurements of their own 3D models —
+-- except that a species with a `CustomModel` uses that imported mesh
+-- instead, if it's been imported into the place.
 --
 -- How it works: the default character's own body parts (Head, Torso/arms/
 -- legs) are made fully invisible but left physically in place — they still
 -- drive movement, swimming, and collision exactly as before, nothing about
 -- gameplay changes. A separate "FishBody" model, welded to the (now
--- invisible) torso, is what's actually seen. Two body styles:
+-- invisible) torso, is what's actually seen. Body styles:
 --   "cubie"        the Cubie Fish's cube body + pixel skin + fins (Fish)
+--   "turtle"       stepped shell, belly, head, paddling flippers (Sea Turtle)
 --   "streamlined"  elongated body, pointed snout, forked tail (Dolphin)
---   "serpentine"   upright body, forward snout, coronet, curled tail (Sea Horse)
 -- It's rebuilt fresh on every call, so it always matches the player's
 -- current species, evolution tier, and size.
 
@@ -235,118 +235,6 @@ local function buildStreamlinedBody(character, torso, bodySpec, tierData, finCol
 end
 
 --============================================================
--- "serpentine" body style: Sea Horse
---============================================================
-
--- A chain of tapering cylinder segments curling from under the body: each
--- segment's center is placed at the midpoint of its own span (so a 90°
--- roll to align the cylinder's length with that span is direction-agnostic
--- — same trick as the coral tower trunk / ship masts), and `cursor`
--- accumulates a pitch rotation each step so the chain curls backward/under
--- as it descends.
-local function attachCurledTail(character, anchor, bodySpec, color, material, folder)
-	local segments = bodySpec.TailSegments or 4
-	local segLength = bodySpec.Height * 0.22
-	local curlPerSegment = math.rad(28)
-
-	local cursor = CFrame.new(0, -bodySpec.Height / 2, bodySpec.Width * 0.25)
-
-	for i = 1, segments do
-		cursor = cursor * CFrame.Angles(curlPerSegment, 0, 0)
-
-		local radius = bodySpec.Width * 0.5 * (1 - (i - 1) / (segments + 1))
-		local segment = Instance.new("Part")
-		segment.Name = "TailSegment"
-		segment.Shape = Enum.PartType.Cylinder
-		segment.Size = Vector3.new(segLength, radius, radius)
-		segment.Color = color
-		segment.Material = material
-		segment.CanCollide = false
-		segment.CanQuery = false
-		segment.Massless = true
-
-		local segmentOffset = cursor * CFrame.new(0, -segLength / 2, 0) * CFrame.Angles(0, 0, math.rad(90))
-		attachPart(character, anchor, segment, segmentOffset).Parent = folder
-
-		cursor = cursor * CFrame.new(0, -segLength, 0)
-	end
-end
-
-local function buildSerpentineBody(character, torso, bodySpec, tierData, finColor, finMaterial, topColor, bellyColor, folder)
-	local H, W = bodySpec.Height, bodySpec.Width
-
-	local body = Instance.new("Part")
-	body.Name = "FishTorso"
-	body.Shape = Enum.PartType.Ball
-	body.Size = Vector3.new(W, H, W * 1.15)
-	body.Color = topColor
-	body.Material = Enum.Material.SmoothPlastic
-	body.CanCollide = false
-	body.CanQuery = false
-	body.Massless = true
-	attachPart(character, torso, body, CFrame.new()).Parent = folder
-
-	local belly = Instance.new("Part")
-	belly.Name = "FishBelly"
-	belly.Shape = Enum.PartType.Ball
-	belly.Size = Vector3.new(W * 0.7, H * 0.7, W * 0.85)
-	belly.Color = bellyColor
-	belly.Material = Enum.Material.SmoothPlastic
-	belly.CanCollide = false
-	belly.CanQuery = false
-	belly.Massless = true
-	attachPart(character, torso, belly, CFrame.new(0, 0, -W * 0.15)).Parent = folder
-
-	-- Snout: a thin cylinder pointing forward from the top of the body.
-	-- Rotating 90° about Y sends the cylinder's default length axis (local
-	-- X) to world -Z (forward) — same family of rotation as the ship's
-	-- cannon barrels.
-	local snout = Instance.new("Part")
-	snout.Name = "SeahorseSnout"
-	snout.Shape = Enum.PartType.Cylinder
-	snout.Size = Vector3.new(bodySpec.SnoutLength, W * 0.32, W * 0.32)
-	snout.Color = topColor
-	snout.Material = Enum.Material.SmoothPlastic
-	snout.CanCollide = false
-	snout.CanQuery = false
-	snout.Massless = true
-	local snoutOffset = CFrame.new(0, H * 0.35, -(W * 0.4 + bodySpec.SnoutLength / 2)) * CFrame.Angles(0, math.rad(90), 0)
-	attachPart(character, torso, snout, snoutOffset).Parent = folder
-
-	-- Coronet: a small crown spike on top of the head, same "point straight
-	-- up" trick as the fish's back spikes.
-	local coronet = Instance.new("WedgePart")
-	coronet.Name = "Coronet"
-	coronet.Size = Vector3.new(0.35, H * 0.22, H * 0.16)
-	coronet.Color = finColor
-	coronet.Material = finMaterial
-	coronet.CanCollide = false
-	coronet.CanQuery = false
-	coronet.Massless = true
-	local coronetOffset = CFrame.new(0, H * 0.5, -W * 0.2) * CFrame.Angles(math.rad(-90), 0, 0)
-	attachPart(character, torso, coronet, coronetOffset).Parent = folder
-
-	if bodySpec.HasSpines then
-		attachSpikes(character, torso, { Height = H, Length = H * 0.6 }, finColor, finMaterial, folder)
-	end
-
-	-- Small dorsal fin along the back, and two tiny "neck" fins for a bit
-	-- of silhouette variety.
-	local s = tierData.FinScale
-	attachAnimatedFin(character, torso, "DorsalFin", Vector3.new(0.35, H * 0.6 * s, H * 0.35 * s), finColor,
-		CFrame.new(0, H * 0.15, W * 0.45) * CFrame.Angles(0, 0, math.rad(90)), finMaterial).Parent = folder
-	attachFin(character, torso, "LeftFin", Vector3.new(W * 0.6 * s, 0.25, W * 0.6 * s), finColor,
-		CFrame.new(-W * 0.45, H * 0.3, 0) * CFrame.Angles(0, 0, math.rad(25)), finMaterial).Parent = folder
-	attachFin(character, torso, "RightFin", Vector3.new(W * 0.6 * s, 0.25, W * 0.6 * s), finColor,
-		CFrame.new(W * 0.45, H * 0.3, 0) * CFrame.Angles(0, 0, math.rad(-25)), finMaterial).Parent = folder
-
-	attachCurledTail(character, torso, bodySpec, topColor, Enum.Material.SmoothPlastic, folder)
-
-	attachEye(character, torso, CFrame.new(-W * 0.28, H * 0.4, -W * 0.35), folder)
-	attachEye(character, torso, CFrame.new(W * 0.28, H * 0.4, -W * 0.35), folder)
-end
-
---============================================================
 -- "cubie" body style: the Cubie Fish, rebuilt from Parts
 --============================================================
 
@@ -373,23 +261,24 @@ local function newSkinPart(className, name, size, color, material)
 	return part
 end
 
--- A tail lobe hinged at the back of the body: Motor6D C0 is the hinge
--- point and C1 the lobe's offset from it, so CreatureAnimator's wag (which
--- rotates C0) swings the lobe around the hinge instead of its own center.
-local function attachTailLobe(character, torso, lobe, joint, lobeOffset, folder)
-	lobe.CFrame = torso.CFrame * joint * lobeOffset
-	lobe.Parent = character
+-- A part hinged to the torso at `joint` (torso space), sitting at
+-- `partOffset` from that hinge: Motor6D C0 is the hinge and C1 the part's
+-- offset from it, so CreatureAnimator's wag (which rotates C0 about its
+-- local Y) swings the part around the hinge instead of its own center.
+local function attachHingedPart(character, torso, part, joint, partOffset, folder)
+	part.CFrame = torso.CFrame * joint * partOffset
+	part.Parent = character
 
 	local motor = Instance.new("Motor6D")
 	motor.Name = "SwimMotor"
 	motor.Part0 = torso
-	motor.Part1 = lobe
+	motor.Part1 = part
 	motor.C0 = joint
-	motor.C1 = lobeOffset:Inverse()
+	motor.C1 = partOffset:Inverse()
 	motor:SetAttribute("BaseC0", joint)
-	motor.Parent = lobe
+	motor.Parent = part
 
-	lobe.Parent = folder
+	part.Parent = folder
 end
 
 -- WedgePart geometry used below: the sloped face points toward local -Z,
@@ -439,12 +328,55 @@ local function buildCubieBody(character, torso, fishLength, baseColorOverride, f
 	local tailSize = bp.Tail.Size * k
 	local lobeSize = Vector3.new(tailSize.X, tailSize.Y / 2, tailSize.Z)
 	local joint = CFrame.new(bp.Tail.Joint * k)
-	attachTailLobe(character, torso, newSkinPart("WedgePart", "TailFinUp", lobeSize, finColor, finMaterial), joint,
+	attachHingedPart(character, torso, newSkinPart("WedgePart", "TailFinUp", lobeSize, finColor, finMaterial), joint,
 		CFrame.new(0, lobeSize.Y / 2, lobeSize.Z / 2), folder)
-	attachTailLobe(character, torso, newSkinPart("WedgePart", "TailFinDown", lobeSize, finColor, finMaterial), joint,
+	attachHingedPart(character, torso, newSkinPart("WedgePart", "TailFinDown", lobeSize, finColor, finMaterial), joint,
 		CFrame.new(0, -lobeSize.Y / 2, lobeSize.Z / 2) * CFrame.Angles(0, 0, math.pi), folder)
 
 	return body.Size
+end
+
+--============================================================
+-- "turtle" body style: the Sea Turtle, built from Parts
+--============================================================
+
+-- SeaTurtleShape.lua holds the turtle's measured parts (stepped shell,
+-- belly, neck, head, eyes, tail) and flippers, in model units.
+local SeaTurtleShape = require(script.Parent.SeaTurtleShape)
+
+local function buildTurtleBody(character, torso, turtleLength, shellColorOverride, folder)
+	local shape = SeaTurtleShape
+	local k = turtleLength / shape.ModelLength
+
+	for _, spec in ipairs(shape.Parts) do
+		local color = (spec.Color == "Shell" and shellColorOverride) or shape.Colors[spec.Color]
+		local part = newSkinPart(spec.Wedge and "WedgePart" or "Part", spec.Name, spec.Size * k, color, Enum.Material.SmoothPlastic)
+		local offset = CFrame.new(spec.Center * k) * CFrame.Angles(0, math.rad(spec.Yaw or 0), 0)
+		attachPart(character, torso, part, offset).Parent = folder
+	end
+
+	-- Flippers are flat discs: a Cylinder's axis is local X, so rolling 90°
+	-- about Z stands that axis up and lays the disc flat; the extra
+	-- -side * droop tilts its outer edge down. Each is hinged at the shell's
+	-- side edge with the hinge's local Y pointed along ±Z, so the animator's
+	-- rotation about that Y flaps it up and down. The sign is mirrored per
+	-- side (both sides flap together) and flipped for the back pair, so back
+	-- flippers stroke opposite the front ones.
+	local droop = math.rad(shape.FlipperDroopDegrees)
+	for _, spec in ipairs(shape.Flippers) do
+		local diameter = spec.Diameter * k
+		local flipper = newSkinPart("Part", spec.Name, Vector3.new(shape.FlipperThickness * k, diameter, diameter),
+			shape.Colors.Skin, Enum.Material.SmoothPlastic)
+		flipper.Shape = Enum.PartType.Cylinder
+
+		local offset = CFrame.new(spec.Center * k) * CFrame.Angles(0, 0, math.rad(90) - spec.Side * droop)
+		local axisSign = -spec.Side * (spec.Front and 1 or -1)
+		local joint = CFrame.new(Vector3.new(spec.Side * shape.JointX, spec.Center.Y, spec.Center.Z) * k)
+			* CFrame.Angles(axisSign * math.rad(90), 0, 0)
+		attachHingedPart(character, torso, flipper, joint, joint:Inverse() * offset, folder)
+	end
+
+	return Vector3.new(1.1, 0.7, 1.2) * k -- the shell's size, for spikes
 end
 
 --============================================================
@@ -687,21 +619,14 @@ function CreatureAppearance.Apply(player)
 	local customSize = customTemplate and buildCustomModelBody(character, torso, customTemplate, speciesData.CustomModel, fishLength, folder)
 	if not customSize and speciesData.BodyStyle == "cubie" then
 		customSize = buildCubieBody(character, torso, fishLength, isGolden and topColor, isGolden and finColor, finMaterial, folder)
+	elseif not customSize and speciesData.BodyStyle == "turtle" then
+		customSize = buildTurtleBody(character, torso, fishLength, isGolden and topColor, folder)
 	end
 
 	if customSize then
 		if tierData.Body.HasSpikes then
 			attachSpikes(character, torso, { Height = customSize.Y, Length = customSize.Z }, finColor, finMaterial, folder)
 		end
-	elseif speciesData.BodyStyle == "serpentine" then
-		local bodySpec = {
-			Height = tierData.Body.Height * scale,
-			Width = tierData.Body.Width * scale,
-			SnoutLength = tierData.Body.SnoutLength * scale,
-			TailSegments = tierData.Body.TailSegments,
-			HasSpines = tierData.Body.HasSpines,
-		}
-		buildSerpentineBody(character, torso, bodySpec, tierData, finColor, finMaterial, topColor, bellyColor, folder)
 	else
 		local bodySpec = {
 			Length = tierData.Body.Length * scale,

@@ -29,7 +29,7 @@ Two free starters, chosen right at the portal:
 | Species | Body style | Look |
 |---|---|---|
 | **Cubie Fish** | your Meshy AI cube shark, with its own skin (see below) | grows every level/tier, spikes + glow at the top tier |
-| **Sea Horse** | serpentine (upright body, forward snout, coronet, curled tail) | tan → purple → green → teal |
+| **Sea Turtle** | your Meshy AI turtle: stepped dark-olive shell, mint belly, square head, paddling flippers (see below) | grows every level/tier, spikes + glow at the top tier |
 
 A third, **Dolphin** (streamlined: elongated body, pointed snout, forked
 tail; gray → orca-black progression), is locked until bought in the shop's
@@ -62,13 +62,26 @@ facing the wrong way, set `YawDegrees` in `Config.Species.Fish.CustomModel`
 (e.g. `180`). `tools/convert_cubie_fish.py` regenerates the FBX from the
 `.blend`.
 
-Sea Horse and Dolphin are built entirely from primitive Parts
-(`CreatureAppearance.lua`). The default avatar's own parts (head, torso, arms, legs)
+### The Sea Turtle
+
+The second starter is your other Meshy AI model, the low-poly sea turtle
+(`assets/source/SeaTurtle_source.blend`), also working with no import. Its
+shape was measured from voxel cross-sections of the model, and its colors
+from its texture, into `SeaTurtleShape.lua`: a five-step domed shell (dark
+olive), a mint-white belly, neck and square head (olive) with a black eye on
+each side, a pointed tail, and four round paddle flippers (front ones
+bigger) drooping slightly outward. That's ~15 Parts. The flippers are hinged
+at the shell's edge and paddle up and down while you swim, with the back
+pair stroking opposite the front pair. With **Golden Scales** the shell
+turns gold.
+
+Dolphin is built entirely from primitive Parts (`CreatureAppearance.lua`).
+On every species, the default avatar's own parts (head, torso, arms, legs)
 are made fully invisible but stay physically in place — movement,
 swimming, and collision are completely untouched — and a separate model,
-welded to the (now invisible) torso, is what's actually rendered. The
-tail (streamlined species) or dorsal fin (Sea Horse) gently wags via a
-Motor6D-driven sine wave for a swimming animation — everything else on the
+welded to the (now invisible) torso, is what's actually rendered. Tails
+(fish/dolphin) and flippers (turtle) move via a Motor6D-driven sine wave
+for a swimming animation — everything else on the
 body uses simpler static WeldConstraints. It works on both R6 and R15
 avatars (the body welds to whichever torso the rig has); on a rig where
 `Model:ScaleTo` doesn't apply cleanly to the (invisible, physical) collision
@@ -79,7 +92,7 @@ Your **evolution tier** (0–5) is shared across every species — switching
 species is a pure reskin, never a progress reset. Size, shape, color, and
 (on the final tier) a soft glow all change with tier:
 
-| Evolution tier | Level range | Dolphin-style body (the Cubie keeps its skin and just grows) | Attack |
+| Evolution tier | Level range | Dolphin body (the Cubie and Turtle keep their look and just grow) | Attack |
 |---|---|---|---|
 | 0 | 1–11 | small, stubby | Nibble (melee) |
 | 1 | 1–11 (after reset) | long and sleek | Lunge Strike (dash) |
@@ -291,9 +304,11 @@ professional art team.
 - `src/ServerScriptService/Modules/CreatureAppearance.lua` — hides the
   default avatar and builds a distinct body per species + evolution tier
   (the Cubie Fish from its blueprint — or its imported mesh, if present — a
-  streamlined body for Dolphin, a serpentine curled-tail body for Sea
-  Horse); wires up Motor6D "SwimMotor" joints on the tail/fin parts for the
+  streamlined body for Dolphin, the Sea Turtle from its shape module);
+  wires up Motor6D "SwimMotor" joints on the tail/fin/flipper parts for the
   client-side swim animation
+- `src/ServerScriptService/Modules/SeaTurtleShape.lua` — the Sea Turtle's
+  measured parts, flippers, and colors
 - `src/ServerScriptService/Modules/CubieFishBlueprint.lua` — generated
   (`tools/generate_cubie_blueprint.py`) from the Cubie Fish model: body
   size, skin palette, every skin pixel, fin/tail measurements
