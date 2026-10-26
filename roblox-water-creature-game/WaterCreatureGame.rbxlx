@@ -113,9 +113,14 @@ Config.TierProgression = {
 -- PlayerSpecies.lua / the shop's Creatures tab) before it can be selected.
 Config.Species = {
 	Fish = {
-		Name = "Fish",
+		Name = "Cubie Fish",
 		ShopCost = 0,
 		BodyStyle = "streamlined",
+		-- Imported mesh used instead of the primitive body when present in the
+		-- place (Studio: Import 3D -> assets/CubieFish.fbx). TailPartName is
+		-- the mesh piece that wags; YawDegrees turns the model if it imports
+		-- facing the wrong way. Tier Body.Length + SnoutLength sets its length.
+		CustomModel = { Name = "CubieFish", BodyPartName = "CubieBody", TailPartName = "CubieTail", YawDegrees = 0 },
 		Tiers = {
 			{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
 				Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 } },
@@ -902,9 +907,9 @@ Workspace:SetAttribute("GraphicsPolishApplied", true)
 					<string name="Name">CreatureAppearance</string>
 					<ProtectedString name="Source"><![CDATA[-- Builds an actual creature-shaped body for the player, distinct per
 -- species (see Config.Species) and evolution tier, instead of just fins
--- bolted onto the default human silhouette. Built entirely from primitive
--- Parts — no custom mesh/asset upload is needed (and none is available
--- from here).
+-- bolted onto the default human silhouette. Built from primitive Parts,
+-- except species with a `CustomModel` (the Cubie Fish) whose imported mesh
+-- is used instead once it's been imported into the place.
 --
 -- How it works: the default character's own body parts (Head, Torso/arms/
 -- legs) are made fully invisible but left physically in place — they still
@@ -917,6 +922,8 @@ Workspace:SetAttribute("GraphicsPolishApplied", true)
 -- current species, evolution tier, and size.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
 local Config = require(ReplicatedStorage.Modules.GameConfig)
 local PlayerSpecies = require(script.Parent.PlayerSpecies)
 
@@ -1245,6 +1252,165 @@ local function buildSerpentineBody(character, torso, bodySpec, tierData, finColo
 end
 
 --============================================================
+-- Imported mesh body (Config.Species[key].CustomModel)
+--============================================================
+
+local CUSTOM_MODEL_FOLDER = "CreatureModels"
+local customModelCache = {}
+
+-- Studio's Import 3D drops the model into Workspace, so the first lookup
+-- moves it into ServerStorage — out of the world, but still clonable.
+-- Accepts either the whole imported Model (named after the .fbx file) or,
+-- failing that, its body MeshPart wherever the importer put it. Folders are
+-- skipped in the fallback so the clones inside players' FishBody folders
+-- are never mistaken for the original.
+local function locateCustomModel(modelSpec)
+	local folder = ServerStorage:FindFirstChild(CUSTOM_MODEL_FOLDER)
+	local stored = folder and folder:FindFirstChild(modelSpec.Name)
+	if stored then
+		return stored
+	end
+
+	local found
+	for _, root in ipairs({ Workspace, ReplicatedStorage, ServerStorage }) do
+		found = root:FindFirstChild(modelSpec.Name, true)
+		if found then
+			break
+		end
+		local bodyPart = modelSpec.BodyPartName and root:FindFirstChild(modelSpec.BodyPartName, true)
+		if bodyPart and bodyPart:IsA("BasePart") and not bodyPart:FindFirstAncestorOfClass("Folder") then
+			local parentModel = bodyPart.Parent
+			found = (parentModel:IsA("Model") and parentModel ~= Workspace) and parentModel or bodyPart
+			break
+		end
+	end
+	if not found then
+		return nil
+	end
+
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = CUSTOM_MODEL_FOLDER
+		folder.Parent = ServerStorage
+	end
+	found.Name = modelSpec.Name
+	found.Parent = folder
+	return found
+end
+
+local function findCustomModel(modelSpec)
+	local cached = customModelCache[modelSpec.Name]
+	if cached == nil then
+		cached = locateCustomModel(modelSpec) or false
+		customModelCache[modelSpec.Name] = cached
+		if not cached then
+			warn("CreatureAppearance: '" .. modelSpec.Name .. "' hasn't been imported into this place, so the "
+				.. "built-in primitive body is used instead. In Studio: Import 3D -> assets/" .. modelSpec.Name
+				.. ".fbx, then save the place.")
+		end
+	end
+	return cached or nil
+end
+
+local function collectParts(root)
+	local parts = {}
+	if root:IsA("BasePart") then
+		table.insert(parts, root)
+	end
+	for _, descendant in ipairs(root:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(parts, descendant)
+		end
+	end
+	return parts
+end
+
+-- World-axis bounding box of `parts` as they sit right now.
+local function worldBounds(parts)
+	local minX, minY, minZ = math.huge, math.huge, math.huge
+	local maxX, maxY, maxZ = -math.huge, -math.huge, -math.huge
+	for _, part in ipairs(parts) do
+		local half = part.Size / 2
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sy in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					local corner = part.CFrame:PointToWorldSpace(Vector3.new(sx * half.X, sy * half.Y, sz * half.Z))
+					minX, minY, minZ = math.min(minX, corner.X), math.min(minY, corner.Y), math.min(minZ, corner.Z)
+					maxX, maxY, maxZ = math.max(maxX, corner.X), math.max(maxY, corner.Y), math.max(maxZ, corner.Z)
+				end
+			end
+		end
+	end
+	local minV, maxV = Vector3.new(minX, minY, minZ), Vector3.new(maxX, maxY, maxZ)
+	return (minV + maxV) / 2, maxV - minV
+end
+
+-- Clones the imported model, scales it so its longest side is
+-- `targetLength`, centers it on the torso (keeping the imported pose's
+-- facing, plus YawDegrees), welds the body, and joins the tail with a
+-- Motor6D "SwimMotor" pivoting at the tail's base so CreatureAnimator wags
+-- it. The importer's facing is taken as-is: the .fbx was exported with the
+-- face toward -Z, Roblox's forward. Returns the scaled size, or nil if the
+-- model has no parts.
+local function buildCustomModelBody(character, torso, template, modelSpec, targetLength, folder)
+	local clone = template:Clone()
+	local parts = collectParts(clone)
+	if #parts == 0 then
+		clone:Destroy()
+		return nil
+	end
+
+	local center, size = worldBounds(parts)
+	local factor = targetLength / math.max(size.X, size.Y, size.Z)
+	local frame = torso.CFrame * CFrame.Angles(0, math.rad(modelSpec.YawDegrees or 0), 0)
+
+	for _, part in ipairs(parts) do
+		for _, joint in ipairs(part:GetChildren()) do
+			if joint:IsA("JointInstance") or joint:IsA("WeldConstraint") then
+				joint:Destroy()
+			end
+		end
+		local relative = part.CFrame - center
+		part.Size = part.Size * factor
+		part.CFrame = frame * (CFrame.new(relative.Position * factor) * relative.Rotation)
+		part.Anchored = false
+		part.CanCollide = false
+		part.CanQuery = false
+		part.Massless = true
+		part.Parent = folder
+	end
+	if not clone:IsA("BasePart") then
+		clone:Destroy()
+	end
+
+	for _, part in ipairs(parts) do
+		if part.Name == modelSpec.TailPartName then
+			local toBody = frame.Position - part.Position
+			local direction = toBody.Magnitude > 1e-3 and toBody.Unit or frame.LookVector
+			local localDir = part.CFrame:VectorToObjectSpace(direction)
+			local halfExtent = 0.5 * (math.abs(localDir.X) * part.Size.X + math.abs(localDir.Y) * part.Size.Y + math.abs(localDir.Z) * part.Size.Z)
+			local jointWorld = CFrame.new(part.Position + direction * halfExtent) * frame.Rotation
+
+			local motor = Instance.new("Motor6D")
+			motor.Name = "SwimMotor"
+			motor.Part0 = torso
+			motor.Part1 = part
+			motor.C0 = torso.CFrame:ToObjectSpace(jointWorld)
+			motor.C1 = part.CFrame:ToObjectSpace(jointWorld)
+			motor:SetAttribute("BaseC0", motor.C0)
+			motor.Parent = part
+		else
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = torso
+			weld.Part1 = part
+			weld.Parent = part
+		end
+	end
+
+	return size * factor
+end
+
+--============================================================
 
 -- Makes every existing body part (Head, torso, arms/legs — whatever the
 -- rig has) fully invisible without touching CanCollide, Anchored, or
@@ -1308,10 +1474,28 @@ function CreatureAppearance.Apply(player)
 	local finColor = isGolden and Color3.fromRGB(255, 235, 150) or tierData.FinColor
 	local finMaterial = isMaxTier and Enum.Material.Neon or Enum.Material.SmoothPlastic
 
+	-- Scale the (invisible) rig before building the body: the body is built
+	-- at an already-scaled size, so scaling afterward would scale it twice
+	-- and desync the tail's saved BaseC0 from its rescaled joint.
+	local ok, err = pcall(function()
+		character:ScaleTo(scale)
+	end)
+	if not ok then
+		warn("CreatureAppearance: ScaleTo failed for " .. player.Name .. " — " .. tostring(err))
+	end
+
 	local folder = Instance.new("Folder")
 	folder.Name = "FishBody"
 
-	if speciesData.BodyStyle == "serpentine" then
+	local customTemplate = speciesData.CustomModel and findCustomModel(speciesData.CustomModel)
+	local customSize = customTemplate and buildCustomModelBody(character, torso, customTemplate, speciesData.CustomModel,
+		(tierData.Body.Length + (tierData.Body.SnoutLength or 0)) * scale, folder)
+
+	if customSize then
+		if tierData.Body.HasSpikes then
+			attachSpikes(character, torso, { Height = customSize.Y, Length = customSize.Z }, finColor, finMaterial, folder)
+		end
+	elseif speciesData.BodyStyle == "serpentine" then
 		local bodySpec = {
 			Height = tierData.Body.Height * scale,
 			Width = tierData.Body.Width * scale,
@@ -1342,12 +1526,12 @@ function CreatureAppearance.Apply(player)
 	end
 
 	folder.Parent = character
+end
 
-	local ok, err = pcall(function()
-		character:ScaleTo(scale)
-	end)
-	if not ok then
-		warn("CreatureAppearance: ScaleTo failed for " .. player.Name .. " — " .. tostring(err))
+for _, speciesKey in ipairs(Config.SpeciesOrder) do
+	local modelSpec = Config.Species[speciesKey].CustomModel
+	if modelSpec then
+		findCustomModel(modelSpec)
 	end
 end
 

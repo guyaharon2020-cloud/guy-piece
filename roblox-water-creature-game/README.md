@@ -28,17 +28,41 @@ Two free starters, chosen right at the portal:
 
 | Species | Body style | Look |
 |---|---|---|
-| **Fish** | streamlined (elongated body, pointed snout, forked tail) | blue → gray shark progression |
+| **Cubie Fish** | custom 3D model — a blocky, textured cube shark (see below) | grows every level/tier, spikes + glow at the top tier |
 | **Sea Horse** | serpentine (upright body, forward snout, coronet, curled tail) | tan → purple → green → teal |
 
-A third, **Dolphin** (also streamlined, gray → orca-black progression), is
-locked until bought in the shop's **Creatures** tab (600 Money) — see
-`Config.Species` in `GameConfig.lua` to add more.
+A third, **Dolphin** (streamlined: elongated body, pointed snout, forked
+tail; gray → orca-black progression), is locked until bought in the shop's
+**Creatures** tab (600 Money) — see `Config.Species` in `GameConfig.lua` to
+add more.
 
-Each species has its own 6-tier look, built entirely from primitive Parts
-(`CreatureAppearance.lua`) — no custom mesh upload was available from here,
-so this is the closest a script alone can get to "looks like a fish/sea
-horse/dolphin." The default avatar's own parts (head, torso, arms, legs)
+### The Cubie Fish model (one-time import)
+
+The starter fish is a real textured 3D model (`assets/CubieFish.fbx`,
+converted from your Meshy AI `.blend`). Roblox only lets a place use a mesh
+that's been uploaded to a Roblox account, and that upload has to happen
+from inside Studio — a `.rbxlx` file can't carry the mesh itself. So after
+opening `WaterCreatureGame.rbxlx`, do this **once**:
+
+1. In Studio, **Home** (or **Avatar**) tab → **Import 3D**.
+2. Pick `assets/CubieFish.fbx` → **Import** (keep the default settings).
+   It appears in the world as a model named **CubieFish** — leave it where
+   it lands; the game moves it out of sight automatically when it starts.
+3. **File → Save** so the imported model stays in the place.
+
+That's it — press Play and the starter fish is the Cubie. Until it's
+imported, the game falls back to the old primitive-built fish (and logs a
+warning in Output saying so), so nothing breaks either way.
+
+The model comes in two pieces — body and tail fin — so the tail wags while
+you swim. It scales with your level and tier like every other species. If
+it ever shows up facing backward or sideways, change `YawDegrees` in
+`Config.Species.Fish.CustomModel` (e.g. `180` or `90`). To re-convert from
+the original `.blend` (`assets/source/CubieFish_source.blend`), run
+`tools/convert_cubie_fish.py` (instructions at the top of that file).
+
+Sea Horse and Dolphin are built entirely from primitive Parts
+(`CreatureAppearance.lua`). The default avatar's own parts (head, torso, arms, legs)
 are made fully invisible but stay physically in place — movement,
 swimming, and collision are completely untouched — and a separate model,
 welded to the (now invisible) torso, is what's actually rendered. The
@@ -54,7 +78,7 @@ Your **evolution tier** (0–5) is shared across every species — switching
 species is a pure reskin, never a progress reset. Size, shape, color, and
 (on the final tier) a soft glow all change with tier:
 
-| Evolution tier | Level range | Fish body | Attack |
+| Evolution tier | Level range | Fish body (primitive fallback; the Cubie just grows) | Attack |
 |---|---|---|---|
 | 0 | 1–11 | small, stubby | Nibble (melee) |
 | 1 | 1–11 (after reset) | long and sleek | Lunge Strike (dash) |
@@ -264,10 +288,15 @@ professional art team.
 - `src/ServerScriptService/Modules/RobuxShop.lua` — Developer Product
   catalog handling, `ProcessReceipt`, granting super powers
 - `src/ServerScriptService/Modules/CreatureAppearance.lua` — hides the
-  default avatar and builds a distinct fish body model per species +
-  evolution tier (streamlined body for Fish/Dolphin, serpentine curled-tail
-  body for Sea Horse); wires up Motor6D "SwimMotor" joints on the tail/fin
-  parts for the client-side swim animation
+  default avatar and builds a distinct body per species + evolution tier
+  (the imported Cubie Fish mesh, a streamlined primitive body for Dolphin
+  or as the Cubie's fallback, a serpentine curled-tail body for Sea Horse);
+  wires up Motor6D "SwimMotor" joints on the tail/fin parts for the
+  client-side swim animation
+- `assets/CubieFish.fbx` (+ `CubieFish_texture.png`) — the starter fish
+  model, ready for Studio's Import 3D; `assets/source/CubieFish_source.blend`
+  is the original, and `tools/convert_cubie_fish.py` regenerates the FBX
+  from it
 - `src/ServerScriptService/ShopHandler.server.lua` — validates/applies all
   three shop categories' purchase requests from the client (Upgrades,
   Creatures, Robux)
@@ -293,11 +322,15 @@ water, which `WorldSetup` generates for you.
 ## Just open it
 
 **`WaterCreatureGame.rbxlx`** is a single, self-contained Roblox place file
-with everything already built in — no Rojo, no manual setup:
+with every script already built in — no Rojo needed, just one import for
+the starter fish's 3D model:
 
 1. Open Roblox Studio.
 2. **File → Open From File...** and pick `WaterCreatureGame.rbxlx`.
-3. Press **Play**. Ram a raft or ship to destroy it; click **Shop** to spend
+3. (Once) import `assets/CubieFish.fbx` for the starter fish model — see
+   [The Cubie Fish model](#the-cubie-fish-model-one-time-import) — then
+   save.
+4. Press **Play**. Ram a raft or ship to destroy it; click **Shop** to spend
    Money on upgrades or (once real Developer Product IDs are set, see
    above) Robux on super powers.
 
@@ -352,6 +385,7 @@ All gameplay tuning lives in `GameConfig.lua`:
 | `Config.Species[key].Tiers[i].Body` | each species' per-tier fish body shape — length/width/height/snout, teeth/spikes/spines |
 | `Config.Species[key].ShopCost` | Money cost to unlock a species (`0` = free starter) |
 | `Config.SpeciesOrder`, `Config.StarterSpecies` | which species exist, and which are free from the start |
+| `Config.Species[key].CustomModel` | use an imported mesh model for a species — its name, body/tail part names, and `YawDegrees` facing fix |
 | `PvPSafeZoneY` | how high up the sky-spawn safe zone extends |
 | `ShipTypes[i].MastCount`, `.SailColor` | how many masts/sails each ship type gets |
 
@@ -388,6 +422,10 @@ All gameplay tuning lives in `GameConfig.lua`:
   the part afterward, while Motor6D is built for exactly this kind of live,
   per-frame `C0` update. Only the tail/fin parts that actually wag use it;
   everything else stays on the simpler static weld.
+- The (invisible) rig is now scaled with `Model:ScaleTo` *before* the fish
+  body is built, not after. Before, the already-scaled body got scaled a
+  second time — on a fresh respawn at 2× size the fish came out 4× — and
+  the animated tail's saved joint offset drifted out of sync with it.
 - The portal's disc and touch-trigger are both Cylinders, whose flat face
   is *not* the default forward-facing direction — without an explicit
   `CFrame.Angles(0, math.rad(90), 0)` they'd render edge-on to an

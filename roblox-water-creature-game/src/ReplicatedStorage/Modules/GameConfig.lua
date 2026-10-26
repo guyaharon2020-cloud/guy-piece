@@ -94,9 +94,14 @@ Config.TierProgression = {
 -- PlayerSpecies.lua / the shop's Creatures tab) before it can be selected.
 Config.Species = {
 	Fish = {
-		Name = "Fish",
+		Name = "Cubie Fish",
 		ShopCost = 0,
 		BodyStyle = "streamlined",
+		-- Imported mesh used instead of the primitive body when present in the
+		-- place (Studio: Import 3D -> assets/CubieFish.fbx). TailPartName is
+		-- the mesh piece that wags; YawDegrees turns the model if it imports
+		-- facing the wrong way. Tier Body.Length + SnoutLength sets its length.
+		CustomModel = { Name = "CubieFish", BodyPartName = "CubieBody", TailPartName = "CubieTail", YawDegrees = 0 },
 		Tiers = {
 			{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
 				Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 } },
