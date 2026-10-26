@@ -28,7 +28,7 @@ Two free starters, chosen right at the portal:
 
 | Species | Body style | Look |
 |---|---|---|
-| **Cubie Fish** | custom 3D model — a blocky, textured cube shark (see below) | grows every level/tier, spikes + glow at the top tier |
+| **Cubie Fish** | your Meshy AI cube shark, with its own skin (see below) | grows every level/tier, spikes + glow at the top tier |
 | **Sea Horse** | serpentine (upright body, forward snout, coronet, curled tail) | tan → purple → green → teal |
 
 A third, **Dolphin** (streamlined: elongated body, pointed snout, forked
@@ -36,30 +36,31 @@ tail; gray → orca-black progression), is locked until bought in the shop's
 **Creatures** tab (600 Money) — see `Config.Species` in `GameConfig.lua` to
 add more.
 
-### The Cubie Fish model (one-time import)
+### The Cubie Fish
 
-The starter fish is a real textured 3D model (`assets/CubieFish.fbx`,
-converted from your Meshy AI `.blend`). Roblox only lets a place use a mesh
-that's been uploaded to a Roblox account, and that upload has to happen
-from inside Studio — a `.rbxlx` file can't carry the mesh itself. So after
-opening `WaterCreatureGame.rbxlx`, do this **once**:
+The starter fish is your Meshy AI cube shark
+(`assets/source/CubieFish_source.blend`), and it works straight away — no
+import or setup. Its look was read out of the model itself by
+`tools/generate_cubie_blueprint.py`, which ray-casts a grid over each face
+of the cube body, reads the texture color under every point, and records
+the skin as a 3-color palette (body blue, navy, white) plus every
+stripe/eye/teeth "pixel" as a rectangle. It also measures the fins and tail
+from the mesh. The result, `CubieFishBlueprint.lua`, is rebuilt in-game from
+~66 Parts: the cube, 60 thin skin plates (the three jagged stripes on each
+side, the eye, the white teeth/belly), a shark dorsal fin, two side fins,
+and a two-lobe tail that wags while you swim. It scales with your level and
+tier, and with **Golden Scales** the body turns gold (stripes stay).
 
-1. In Studio, **Home** (or **Avatar**) tab → **Import 3D**.
-2. Pick `assets/CubieFish.fbx` → **Import** (keep the default settings).
-   It appears in the world as a model named **CubieFish** — leave it where
-   it lands; the game moves it out of sight automatically when it starts.
-3. **File → Save** so the imported model stays in the place.
-
-That's it — press Play and the starter fish is the Cubie. Until it's
-imported, the game falls back to the old primitive-built fish (and logs a
-warning in Output saying so), so nothing breaks either way.
-
-The model comes in two pieces — body and tail fin — so the tail wags while
-you swim. It scales with your level and tier like every other species. If
-it ever shows up facing backward or sideways, change `YawDegrees` in
-`Config.Species.Fish.CustomModel` (e.g. `180` or `90`). To re-convert from
-the original `.blend` (`assets/source/CubieFish_source.blend`), run
-`tools/convert_cubie_fish.py` (instructions at the top of that file).
+**Optional, smoother version:** the real mesh is in `assets/CubieFish.fbx`
+(decimated, tail split out, texture embedded) — rounded corners and the full
+texture. Roblox only lets a place use a mesh uploaded from inside Studio, so
+it can't be packed into the `.rbxlx`. To use it: Studio **Home** (or
+**Avatar**) tab → **Import 3D** → pick `CubieFish.fbx` → **Import**, leave it
+where it lands (the game moves it out of sight at start), then **File →
+Save**. If it's found, it's used instead of the Part version; if it shows up
+facing the wrong way, set `YawDegrees` in `Config.Species.Fish.CustomModel`
+(e.g. `180`). `tools/convert_cubie_fish.py` regenerates the FBX from the
+`.blend`.
 
 Sea Horse and Dolphin are built entirely from primitive Parts
 (`CreatureAppearance.lua`). The default avatar's own parts (head, torso, arms, legs)
@@ -78,7 +79,7 @@ Your **evolution tier** (0–5) is shared across every species — switching
 species is a pure reskin, never a progress reset. Size, shape, color, and
 (on the final tier) a soft glow all change with tier:
 
-| Evolution tier | Level range | Fish body (primitive fallback; the Cubie just grows) | Attack |
+| Evolution tier | Level range | Dolphin-style body (the Cubie keeps its skin and just grows) | Attack |
 |---|---|---|---|
 | 0 | 1–11 | small, stubby | Nibble (melee) |
 | 1 | 1–11 (after reset) | long and sleek | Lunge Strike (dash) |
@@ -289,12 +290,15 @@ professional art team.
   catalog handling, `ProcessReceipt`, granting super powers
 - `src/ServerScriptService/Modules/CreatureAppearance.lua` — hides the
   default avatar and builds a distinct body per species + evolution tier
-  (the imported Cubie Fish mesh, a streamlined primitive body for Dolphin
-  or as the Cubie's fallback, a serpentine curled-tail body for Sea Horse);
-  wires up Motor6D "SwimMotor" joints on the tail/fin parts for the
+  (the Cubie Fish from its blueprint — or its imported mesh, if present — a
+  streamlined body for Dolphin, a serpentine curled-tail body for Sea
+  Horse); wires up Motor6D "SwimMotor" joints on the tail/fin parts for the
   client-side swim animation
-- `assets/CubieFish.fbx` (+ `CubieFish_texture.png`) — the starter fish
-  model, ready for Studio's Import 3D; `assets/source/CubieFish_source.blend`
+- `src/ServerScriptService/Modules/CubieFishBlueprint.lua` — generated
+  (`tools/generate_cubie_blueprint.py`) from the Cubie Fish model: body
+  size, skin palette, every skin pixel, fin/tail measurements
+- `assets/CubieFish.fbx` (+ `CubieFish_texture.png`) — the optional
+  smoother mesh for Studio's Import 3D; `assets/source/CubieFish_source.blend`
   is the original, and `tools/convert_cubie_fish.py` regenerates the FBX
   from it
 - `src/ServerScriptService/ShopHandler.server.lua` — validates/applies all
@@ -322,15 +326,11 @@ water, which `WorldSetup` generates for you.
 ## Just open it
 
 **`WaterCreatureGame.rbxlx`** is a single, self-contained Roblox place file
-with every script already built in — no Rojo needed, just one import for
-the starter fish's 3D model:
+with everything already built in — no Rojo, no manual setup:
 
 1. Open Roblox Studio.
 2. **File → Open From File...** and pick `WaterCreatureGame.rbxlx`.
-3. (Once) import `assets/CubieFish.fbx` for the starter fish model — see
-   [The Cubie Fish model](#the-cubie-fish-model-one-time-import) — then
-   save.
-4. Press **Play**. Ram a raft or ship to destroy it; click **Shop** to spend
+3. Press **Play**. Ram a raft or ship to destroy it; click **Shop** to spend
    Money on upgrades or (once real Developer Product IDs are set, see
    above) Robux on super powers.
 

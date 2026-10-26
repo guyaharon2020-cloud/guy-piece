@@ -1,15 +1,17 @@
 -- Builds an actual creature-shaped body for the player, distinct per
 -- species (see Config.Species) and evolution tier, instead of just fins
--- bolted onto the default human silhouette. Built from primitive Parts,
--- except species with a `CustomModel` (the Cubie Fish) whose imported mesh
--- is used instead once it's been imported into the place.
+-- bolted onto the default human silhouette. Built from primitive Parts —
+-- the Cubie Fish too, from a blueprint of its own 3D model — except that a
+-- species with a `CustomModel` uses that imported mesh instead, if it's
+-- been imported into the place.
 --
 -- How it works: the default character's own body parts (Head, Torso/arms/
 -- legs) are made fully invisible but left physically in place — they still
 -- drive movement, swimming, and collision exactly as before, nothing about
 -- gameplay changes. A separate "FishBody" model, welded to the (now
 -- invisible) torso, is what's actually seen. Two body styles:
---   "streamlined"  elongated body, pointed snout, forked tail (Fish, Dolphin)
+--   "cubie"        the Cubie Fish's cube body + pixel skin + fins (Fish)
+--   "streamlined"  elongated body, pointed snout, forked tail (Dolphin)
 --   "serpentine"   upright body, forward snout, coronet, curled tail (Sea Horse)
 -- It's rebuilt fresh on every call, so it always matches the player's
 -- current species, evolution tier, and size.
@@ -115,7 +117,7 @@ local function attachEye(character, anchor, offset, folder)
 end
 
 --============================================================
--- "streamlined" body style: Fish, Dolphin
+-- "streamlined" body style: Dolphin
 --============================================================
 
 -- A pointed snout: a WedgePart's taper runs along its own local Z by
@@ -345,6 +347,107 @@ local function buildSerpentineBody(character, torso, bodySpec, tierData, finColo
 end
 
 --============================================================
+-- "cubie" body style: the Cubie Fish, rebuilt from Parts
+--============================================================
+
+-- CubieFishBlueprint.lua is generated from the Cubie Fish's own 3D model
+-- and texture (tools/generate_cubie_blueprint.py): the cube body's size and
+-- color, every stripe/eye/teeth "pixel" of its skin as a rectangle on one of
+-- the cube's faces, and its fin/tail measurements — all in units of the
+-- whole fish's length. So it looks like the model with no mesh import.
+local CubieBlueprint = require(script.Parent.CubieFishBlueprint)
+
+local PIXEL_THICKNESS = 0.006 -- fraction of the fish's length
+local FIN_THICKNESS = 0.02
+local AXIS_VECTORS = { X = Vector3.new(1, 0, 0), Y = Vector3.new(0, 1, 0), Z = Vector3.new(0, 0, 1) }
+
+local function newSkinPart(className, name, size, color, material)
+	local part = Instance.new(className)
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = material
+	part.CanCollide = false
+	part.CanQuery = false
+	part.Massless = true
+	return part
+end
+
+-- A tail lobe hinged at the back of the body: Motor6D C0 is the hinge
+-- point and C1 the lobe's offset from it, so CreatureAnimator's wag (which
+-- rotates C0) swings the lobe around the hinge instead of its own center.
+local function attachTailLobe(character, torso, lobe, joint, lobeOffset, folder)
+	lobe.CFrame = torso.CFrame * joint * lobeOffset
+	lobe.Parent = character
+
+	local motor = Instance.new("Motor6D")
+	motor.Name = "SwimMotor"
+	motor.Part0 = torso
+	motor.Part1 = lobe
+	motor.C0 = joint
+	motor.C1 = lobeOffset:Inverse()
+	motor:SetAttribute("BaseC0", joint)
+	motor.Parent = lobe
+
+	lobe.Parent = folder
+end
+
+-- WedgePart geometry used below: the sloped face points toward local -Z,
+-- so the wedge is zero-height at -Z and full height at +Z.
+local function buildCubieBody(character, torso, fishLength, baseColorOverride, finColorOverride, finMaterial, folder)
+	local bp = CubieBlueprint
+	local k = fishLength
+	local baseColor = baseColorOverride or bp.BaseColor
+	local finColor = finColorOverride or bp.FinColor
+
+	local body = newSkinPart("Part", "FishTorso", bp.BodySize * k, baseColor, Enum.Material.SmoothPlastic)
+	attachPart(character, torso, body, CFrame.new()).Parent = folder
+
+	-- Each pixel is a thin plate lying on its face of the cube, raised by
+	-- half its thickness so it sits on top of the surface.
+	local thickness = PIXEL_THICKNESS * k
+	for _, pixel in ipairs(bp.Pixels) do
+		local center, size, axis, colorIndex = pixel[1], pixel[2], pixel[3], pixel[4]
+		local normal = AXIS_VECTORS[axis]
+		local outward = center:Dot(normal) >= 0 and 1 or -1
+		local plate = newSkinPart("Part", "SkinPixel", size * k + normal * thickness, bp.Palette[colorIndex], Enum.Material.SmoothPlastic)
+		attachPart(character, torso, plate, CFrame.new(center * k + normal * (outward * thickness / 2))).Parent = folder
+	end
+
+	-- Dorsal fin: unrotated, so it ramps up from the front to a tall back
+	-- edge, like a shark fin.
+	local dorsal = newSkinPart("WedgePart", "DorsalFin", bp.DorsalFin.Size * k, finColor, finMaterial)
+	attachPart(character, torso, dorsal, CFrame.new(bp.DorsalFin.Center * k)).Parent = folder
+
+	-- Side fins: the blueprint gives each fin's bounding box (outward span
+	-- in X, droop in Y). Rolling about Z by ±(90° + droop) turns the wedge's
+	-- height axis (local Y) to point outward and down: for the left fin,
+	-- local Y -> (-sin θ, cos θ) = (-cos droop, -sin droop).
+	for _, finSpec in ipairs({ { bp.LeftFin, -1, "LeftFin" }, { bp.RightFin, 1, "RightFin" } }) do
+		local spec, side, name = finSpec[1], finSpec[2], finSpec[3]
+		local span = spec.Size * k
+		local length = math.sqrt(span.X ^ 2 + span.Y ^ 2)
+		local droop = math.atan2(span.Y, span.X)
+		local fin = newSkinPart("WedgePart", name, Vector3.new(FIN_THICKNESS * k, length, span.Z), finColor, finMaterial)
+		local offset = CFrame.new(spec.Center * k) * CFrame.Angles(0, 0, -side * (math.pi / 2 + droop))
+		attachPart(character, torso, fin, offset).Parent = folder
+	end
+
+	-- Tail: an upper lobe ramping up toward the back, and a lower lobe (the
+	-- same wedge rolled 180°) ramping down — together a fan that widens
+	-- behind the hinge, both wagging around it.
+	local tailSize = bp.Tail.Size * k
+	local lobeSize = Vector3.new(tailSize.X, tailSize.Y / 2, tailSize.Z)
+	local joint = CFrame.new(bp.Tail.Joint * k)
+	attachTailLobe(character, torso, newSkinPart("WedgePart", "TailFinUp", lobeSize, finColor, finMaterial), joint,
+		CFrame.new(0, lobeSize.Y / 2, lobeSize.Z / 2), folder)
+	attachTailLobe(character, torso, newSkinPart("WedgePart", "TailFinDown", lobeSize, finColor, finMaterial), joint,
+		CFrame.new(0, -lobeSize.Y / 2, lobeSize.Z / 2) * CFrame.Angles(0, 0, math.pi), folder)
+
+	return body.Size
+end
+
+--============================================================
 -- Imported mesh body (Config.Species[key].CustomModel)
 --============================================================
 
@@ -397,9 +500,8 @@ local function findCustomModel(modelSpec)
 		cached = locateCustomModel(modelSpec) or false
 		customModelCache[modelSpec.Name] = cached
 		if not cached then
-			warn("CreatureAppearance: '" .. modelSpec.Name .. "' hasn't been imported into this place, so the "
-				.. "built-in primitive body is used instead. In Studio: Import 3D -> assets/" .. modelSpec.Name
-				.. ".fbx, then save the place.")
+			print("CreatureAppearance: '" .. modelSpec.Name .. "' mesh not imported, using the Part-built version. "
+				.. "For the smoother mesh: Studio Import 3D -> assets/" .. modelSpec.Name .. ".fbx, then save.")
 		end
 	end
 	return cached or nil
@@ -580,9 +682,12 @@ function CreatureAppearance.Apply(player)
 	local folder = Instance.new("Folder")
 	folder.Name = "FishBody"
 
+	local fishLength = (tierData.Body.Length + (tierData.Body.SnoutLength or 0)) * scale
 	local customTemplate = speciesData.CustomModel and findCustomModel(speciesData.CustomModel)
-	local customSize = customTemplate and buildCustomModelBody(character, torso, customTemplate, speciesData.CustomModel,
-		(tierData.Body.Length + (tierData.Body.SnoutLength or 0)) * scale, folder)
+	local customSize = customTemplate and buildCustomModelBody(character, torso, customTemplate, speciesData.CustomModel, fishLength, folder)
+	if not customSize and speciesData.BodyStyle == "cubie" then
+		customSize = buildCubieBody(character, torso, fishLength, isGolden and topColor, isGolden and finColor, finMaterial, folder)
+	end
 
 	if customSize then
 		if tierData.Body.HasSpikes then

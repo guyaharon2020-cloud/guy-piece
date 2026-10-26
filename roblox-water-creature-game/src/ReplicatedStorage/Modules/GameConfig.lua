@@ -87,7 +87,8 @@ Config.TierProgression = {
 
 -- Species: each has its own 6-tier look (Color/FinColor/FinScale/Body) built
 -- by CreatureAppearance.lua according to BodyStyle:
---   "streamlined"  elongated body + pointed snout + forked tail (Fish, Dolphin)
+--   "cubie"        the Cubie Fish's cube body + pixel skin (Fish)
+--   "streamlined"  elongated body + pointed snout + forked tail (Dolphin)
 --   "serpentine"   upright curled body + long snout + coiled tail (Sea Horse)
 -- ShopCost = 0 means it's a free starter, choosable at the portal
 -- (SkySpawn.server.lua). ShopCost > 0 means it must be bought first (see
@@ -96,14 +97,17 @@ Config.Species = {
 	Fish = {
 		Name = "Cubie Fish",
 		ShopCost = 0,
-		BodyStyle = "streamlined",
-		-- Imported mesh used instead of the primitive body when present in the
-		-- place (Studio: Import 3D -> assets/CubieFish.fbx). TailPartName is
-		-- the mesh piece that wags; YawDegrees turns the model if it imports
-		-- facing the wrong way. Tier Body.Length + SnoutLength sets its length.
+		-- "cubie" = rebuilt from Parts using CubieFishBlueprint.lua (its
+		-- skin is the model's own texture; tier Color/Body shape don't apply,
+		-- only Body.Length + SnoutLength, which sets its overall length).
+		BodyStyle = "cubie",
+		-- Optional smoother version: if this mesh has been imported into the
+		-- place (Studio: Import 3D -> assets/CubieFish.fbx) it's used instead.
+		-- TailPartName is the mesh piece that wags; YawDegrees turns the model
+		-- if it imports facing the wrong way.
 		CustomModel = { Name = "CubieFish", BodyPartName = "CubieBody", TailPartName = "CubieTail", YawDegrees = 0 },
 		Tiers = {
-			{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
+			{ Name = "Minnow", Color = Color3.fromRGB(56, 125, 175), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
 				Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 } },
 			{ Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140), FinScale = 1.15,
 				Body = { Length = 5.5, Width = 1.1, Height = 1.0, SnoutLength = 1.3 } },

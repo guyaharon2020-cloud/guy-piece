@@ -106,7 +106,8 @@ Config.TierProgression = {
 
 -- Species: each has its own 6-tier look (Color/FinColor/FinScale/Body) built
 -- by CreatureAppearance.lua according to BodyStyle:
---   "streamlined"  elongated body + pointed snout + forked tail (Fish, Dolphin)
+--   "cubie"        the Cubie Fish's cube body + pixel skin (Fish)
+--   "streamlined"  elongated body + pointed snout + forked tail (Dolphin)
 --   "serpentine"   upright curled body + long snout + coiled tail (Sea Horse)
 -- ShopCost = 0 means it's a free starter, choosable at the portal
 -- (SkySpawn.server.lua). ShopCost > 0 means it must be bought first (see
@@ -115,14 +116,17 @@ Config.Species = {
 	Fish = {
 		Name = "Cubie Fish",
 		ShopCost = 0,
-		BodyStyle = "streamlined",
-		-- Imported mesh used instead of the primitive body when present in the
-		-- place (Studio: Import 3D -> assets/CubieFish.fbx). TailPartName is
-		-- the mesh piece that wags; YawDegrees turns the model if it imports
-		-- facing the wrong way. Tier Body.Length + SnoutLength sets its length.
+		-- "cubie" = rebuilt from Parts using CubieFishBlueprint.lua (its
+		-- skin is the model's own texture; tier Color/Body shape don't apply,
+		-- only Body.Length + SnoutLength, which sets its overall length).
+		BodyStyle = "cubie",
+		-- Optional smoother version: if this mesh has been imported into the
+		-- place (Studio: Import 3D -> assets/CubieFish.fbx) it's used instead.
+		-- TailPartName is the mesh piece that wags; YawDegrees turns the model
+		-- if it imports facing the wrong way.
 		CustomModel = { Name = "CubieFish", BodyPartName = "CubieBody", TailPartName = "CubieTail", YawDegrees = 0 },
 		Tiers = {
-			{ Name = "Minnow", Color = Color3.fromRGB(90, 170, 200), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
+			{ Name = "Minnow", Color = Color3.fromRGB(56, 125, 175), FinColor = Color3.fromRGB(50, 120, 150), FinScale = 1.0,
 				Body = { Length = 3.5, Width = 1.2, Height = 1.1, SnoutLength = 0.8 } },
 			{ Name = "Barracuda", Color = Color3.fromRGB(70, 150, 190), FinColor = Color3.fromRGB(30, 100, 140), FinScale = 1.15,
 				Body = { Length = 5.5, Width = 1.1, Height = 1.0, SnoutLength = 1.3 } },
@@ -907,16 +911,18 @@ Workspace:SetAttribute("GraphicsPolishApplied", true)
 					<string name="Name">CreatureAppearance</string>
 					<ProtectedString name="Source"><![CDATA[-- Builds an actual creature-shaped body for the player, distinct per
 -- species (see Config.Species) and evolution tier, instead of just fins
--- bolted onto the default human silhouette. Built from primitive Parts,
--- except species with a `CustomModel` (the Cubie Fish) whose imported mesh
--- is used instead once it's been imported into the place.
+-- bolted onto the default human silhouette. Built from primitive Parts —
+-- the Cubie Fish too, from a blueprint of its own 3D model — except that a
+-- species with a `CustomModel` uses that imported mesh instead, if it's
+-- been imported into the place.
 --
 -- How it works: the default character's own body parts (Head, Torso/arms/
 -- legs) are made fully invisible but left physically in place — they still
 -- drive movement, swimming, and collision exactly as before, nothing about
 -- gameplay changes. A separate "FishBody" model, welded to the (now
 -- invisible) torso, is what's actually seen. Two body styles:
---   "streamlined"  elongated body, pointed snout, forked tail (Fish, Dolphin)
+--   "cubie"        the Cubie Fish's cube body + pixel skin + fins (Fish)
+--   "streamlined"  elongated body, pointed snout, forked tail (Dolphin)
 --   "serpentine"   upright body, forward snout, coronet, curled tail (Sea Horse)
 -- It's rebuilt fresh on every call, so it always matches the player's
 -- current species, evolution tier, and size.
@@ -1022,7 +1028,7 @@ local function attachEye(character, anchor, offset, folder)
 end
 
 --============================================================
--- "streamlined" body style: Fish, Dolphin
+-- "streamlined" body style: Dolphin
 --============================================================
 
 -- A pointed snout: a WedgePart's taper runs along its own local Z by
@@ -1252,6 +1258,107 @@ local function buildSerpentineBody(character, torso, bodySpec, tierData, finColo
 end
 
 --============================================================
+-- "cubie" body style: the Cubie Fish, rebuilt from Parts
+--============================================================
+
+-- CubieFishBlueprint.lua is generated from the Cubie Fish's own 3D model
+-- and texture (tools/generate_cubie_blueprint.py): the cube body's size and
+-- color, every stripe/eye/teeth "pixel" of its skin as a rectangle on one of
+-- the cube's faces, and its fin/tail measurements — all in units of the
+-- whole fish's length. So it looks like the model with no mesh import.
+local CubieBlueprint = require(script.Parent.CubieFishBlueprint)
+
+local PIXEL_THICKNESS = 0.006 -- fraction of the fish's length
+local FIN_THICKNESS = 0.02
+local AXIS_VECTORS = { X = Vector3.new(1, 0, 0), Y = Vector3.new(0, 1, 0), Z = Vector3.new(0, 0, 1) }
+
+local function newSkinPart(className, name, size, color, material)
+	local part = Instance.new(className)
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = material
+	part.CanCollide = false
+	part.CanQuery = false
+	part.Massless = true
+	return part
+end
+
+-- A tail lobe hinged at the back of the body: Motor6D C0 is the hinge
+-- point and C1 the lobe's offset from it, so CreatureAnimator's wag (which
+-- rotates C0) swings the lobe around the hinge instead of its own center.
+local function attachTailLobe(character, torso, lobe, joint, lobeOffset, folder)
+	lobe.CFrame = torso.CFrame * joint * lobeOffset
+	lobe.Parent = character
+
+	local motor = Instance.new("Motor6D")
+	motor.Name = "SwimMotor"
+	motor.Part0 = torso
+	motor.Part1 = lobe
+	motor.C0 = joint
+	motor.C1 = lobeOffset:Inverse()
+	motor:SetAttribute("BaseC0", joint)
+	motor.Parent = lobe
+
+	lobe.Parent = folder
+end
+
+-- WedgePart geometry used below: the sloped face points toward local -Z,
+-- so the wedge is zero-height at -Z and full height at +Z.
+local function buildCubieBody(character, torso, fishLength, baseColorOverride, finColorOverride, finMaterial, folder)
+	local bp = CubieBlueprint
+	local k = fishLength
+	local baseColor = baseColorOverride or bp.BaseColor
+	local finColor = finColorOverride or bp.FinColor
+
+	local body = newSkinPart("Part", "FishTorso", bp.BodySize * k, baseColor, Enum.Material.SmoothPlastic)
+	attachPart(character, torso, body, CFrame.new()).Parent = folder
+
+	-- Each pixel is a thin plate lying on its face of the cube, raised by
+	-- half its thickness so it sits on top of the surface.
+	local thickness = PIXEL_THICKNESS * k
+	for _, pixel in ipairs(bp.Pixels) do
+		local center, size, axis, colorIndex = pixel[1], pixel[2], pixel[3], pixel[4]
+		local normal = AXIS_VECTORS[axis]
+		local outward = center:Dot(normal) >= 0 and 1 or -1
+		local plate = newSkinPart("Part", "SkinPixel", size * k + normal * thickness, bp.Palette[colorIndex], Enum.Material.SmoothPlastic)
+		attachPart(character, torso, plate, CFrame.new(center * k + normal * (outward * thickness / 2))).Parent = folder
+	end
+
+	-- Dorsal fin: unrotated, so it ramps up from the front to a tall back
+	-- edge, like a shark fin.
+	local dorsal = newSkinPart("WedgePart", "DorsalFin", bp.DorsalFin.Size * k, finColor, finMaterial)
+	attachPart(character, torso, dorsal, CFrame.new(bp.DorsalFin.Center * k)).Parent = folder
+
+	-- Side fins: the blueprint gives each fin's bounding box (outward span
+	-- in X, droop in Y). Rolling about Z by ±(90° + droop) turns the wedge's
+	-- height axis (local Y) to point outward and down: for the left fin,
+	-- local Y -> (-sin θ, cos θ) = (-cos droop, -sin droop).
+	for _, finSpec in ipairs({ { bp.LeftFin, -1, "LeftFin" }, { bp.RightFin, 1, "RightFin" } }) do
+		local spec, side, name = finSpec[1], finSpec[2], finSpec[3]
+		local span = spec.Size * k
+		local length = math.sqrt(span.X ^ 2 + span.Y ^ 2)
+		local droop = math.atan2(span.Y, span.X)
+		local fin = newSkinPart("WedgePart", name, Vector3.new(FIN_THICKNESS * k, length, span.Z), finColor, finMaterial)
+		local offset = CFrame.new(spec.Center * k) * CFrame.Angles(0, 0, -side * (math.pi / 2 + droop))
+		attachPart(character, torso, fin, offset).Parent = folder
+	end
+
+	-- Tail: an upper lobe ramping up toward the back, and a lower lobe (the
+	-- same wedge rolled 180°) ramping down — together a fan that widens
+	-- behind the hinge, both wagging around it.
+	local tailSize = bp.Tail.Size * k
+	local lobeSize = Vector3.new(tailSize.X, tailSize.Y / 2, tailSize.Z)
+	local joint = CFrame.new(bp.Tail.Joint * k)
+	attachTailLobe(character, torso, newSkinPart("WedgePart", "TailFinUp", lobeSize, finColor, finMaterial), joint,
+		CFrame.new(0, lobeSize.Y / 2, lobeSize.Z / 2), folder)
+	attachTailLobe(character, torso, newSkinPart("WedgePart", "TailFinDown", lobeSize, finColor, finMaterial), joint,
+		CFrame.new(0, -lobeSize.Y / 2, lobeSize.Z / 2) * CFrame.Angles(0, 0, math.pi), folder)
+
+	return body.Size
+end
+
+--============================================================
 -- Imported mesh body (Config.Species[key].CustomModel)
 --============================================================
 
@@ -1304,9 +1411,8 @@ local function findCustomModel(modelSpec)
 		cached = locateCustomModel(modelSpec) or false
 		customModelCache[modelSpec.Name] = cached
 		if not cached then
-			warn("CreatureAppearance: '" .. modelSpec.Name .. "' hasn't been imported into this place, so the "
-				.. "built-in primitive body is used instead. In Studio: Import 3D -> assets/" .. modelSpec.Name
-				.. ".fbx, then save the place.")
+			print("CreatureAppearance: '" .. modelSpec.Name .. "' mesh not imported, using the Part-built version. "
+				.. "For the smoother mesh: Studio Import 3D -> assets/" .. modelSpec.Name .. ".fbx, then save.")
 		end
 	end
 	return cached or nil
@@ -1487,9 +1593,12 @@ function CreatureAppearance.Apply(player)
 	local folder = Instance.new("Folder")
 	folder.Name = "FishBody"
 
+	local fishLength = (tierData.Body.Length + (tierData.Body.SnoutLength or 0)) * scale
 	local customTemplate = speciesData.CustomModel and findCustomModel(speciesData.CustomModel)
-	local customSize = customTemplate and buildCustomModelBody(character, torso, customTemplate, speciesData.CustomModel,
-		(tierData.Body.Length + (tierData.Body.SnoutLength or 0)) * scale, folder)
+	local customSize = customTemplate and buildCustomModelBody(character, torso, customTemplate, speciesData.CustomModel, fishLength, folder)
+	if not customSize and speciesData.BodyStyle == "cubie" then
+		customSize = buildCubieBody(character, torso, fishLength, isGolden and topColor, isGolden and finColor, finMaterial, folder)
+	end
 
 	if customSize then
 		if tierData.Body.HasSpikes then
@@ -1540,6 +1649,93 @@ return CreatureAppearance
 				</Properties>
 			</Item>
 			<Item class="ModuleScript" referent="RBX11">
+				<Properties>
+					<string name="Name">CubieFishBlueprint</string>
+					<ProtectedString name="Source"><![CDATA[-- GENERATED by tools/generate_cubie_blueprint.py from
+-- assets/source/CubieFish_source.blend — don't edit by hand.
+-- Roblox axes (X right, Y up, face toward -Z), centered on the cube body,
+-- scaled so the whole fish (snout to tail tip) is 1 unit long.
+return {
+	BodySize = Vector3.new(0.4932, 0.4749, 0.7079),
+	BaseColor = Color3.fromRGB(56, 125, 175),
+	FinColor = Color3.fromRGB(55, 125, 177),
+	Palette = {
+		Color3.fromRGB(56, 125, 175),
+		Color3.fromRGB(230, 231, 235),
+		Color3.fromRGB(16, 82, 139),
+	},
+	-- { center, size (0 on the face's normal axis), normal axis, palette index }
+	Pixels = {
+		{ Vector3.new(0.2466, -0.0237, -0.1298), Vector3.new(0.0000, 0.0475, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, -0.0237, -0.2596), Vector3.new(0.0000, 0.0475, 0.0472), "X", 3 },
+		{ Vector3.new(0.2466, 0.0950, 0.2006), Vector3.new(0.0000, 0.2374, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.1069, 0.0118), Vector3.new(0.0000, 0.2612, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.1069, -0.1062), Vector3.new(0.0000, 0.2612, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.1187, 0.0354), Vector3.new(0.0000, 0.2374, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.0831, -0.0708), Vector3.new(0.0000, 0.0712, 0.0472), "X", 3 },
+		{ Vector3.new(0.2466, 0.0950, 0.2242), Vector3.new(0.0000, 0.0475, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.1069, 0.1770), Vector3.new(0.0000, 0.0237, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.1069, 0.0708), Vector3.new(0.0000, 0.0237, 0.0472), "X", 3 },
+		{ Vector3.new(0.2466, 0.1662, -0.1298), Vector3.new(0.0000, 0.1425, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.2018, 0.1770), Vector3.new(0.0000, 0.0712, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.1900, 0.0590), Vector3.new(0.0000, 0.0475, 0.0236), "X", 3 },
+		{ Vector3.new(0.2466, 0.2256, 0.1534), Vector3.new(0.0000, 0.0237, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, -0.0237, -0.1298), Vector3.new(0.0000, 0.0475, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, -0.0237, -0.2596), Vector3.new(0.0000, 0.0475, 0.0472), "X", 3 },
+		{ Vector3.new(-0.2466, 0.0950, 0.2006), Vector3.new(0.0000, 0.2374, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1069, 0.0118), Vector3.new(0.0000, 0.2612, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1069, -0.1062), Vector3.new(0.0000, 0.2612, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1187, 0.0354), Vector3.new(0.0000, 0.2374, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.0831, 0.2360), Vector3.new(0.0000, 0.0712, 0.0472), "X", 3 },
+		{ Vector3.new(-0.2466, 0.0831, -0.0826), Vector3.new(0.0000, 0.0712, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1069, 0.1770), Vector3.new(0.0000, 0.0237, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1069, 0.0590), Vector3.new(0.0000, 0.0237, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1069, -0.0590), Vector3.new(0.0000, 0.0237, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1662, -0.1298), Vector3.new(0.0000, 0.1425, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.2018, 0.1770), Vector3.new(0.0000, 0.0712, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.1900, 0.0590), Vector3.new(0.0000, 0.0475, 0.0236), "X", 3 },
+		{ Vector3.new(-0.2466, 0.2256, 0.1534), Vector3.new(0.0000, 0.0237, 0.0236), "X", 3 },
+		{ Vector3.new(0.0000, -0.1900, -0.3539), Vector3.new(0.2584, 0.0950, 0.0000), "Z", 2 },
+		{ Vector3.new(0.0000, -0.1306, -0.3539), Vector3.new(0.2114, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(-0.0117, -0.2256, 0.3539), Vector3.new(0.2819, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(0.0000, -0.2018, 0.3539), Vector3.new(0.2584, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(-0.0822, -0.1662, 0.3539), Vector3.new(0.0940, 0.0475, 0.0000), "Z", 2 },
+		{ Vector3.new(0.0705, -0.1781, 0.3539), Vector3.new(0.1174, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(0.0822, -0.1543, 0.3539), Vector3.new(0.0940, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(-0.0705, -0.1306, 0.3539), Vector3.new(0.0705, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(0.0705, -0.1306, 0.3539), Vector3.new(0.0705, 0.0237, 0.0000), "Z", 2 },
+		{ Vector3.new(-0.2349, 0.2374, 0.1888), Vector3.new(0.0235, 0.0000, 0.0472), "Y", 3 },
+		{ Vector3.new(0.2349, 0.2374, 0.1888), Vector3.new(0.0235, 0.0000, 0.0472), "Y", 3 },
+		{ Vector3.new(-0.1644, 0.2374, 0.1770), Vector3.new(0.1174, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(0.1644, 0.2374, 0.1770), Vector3.new(0.1174, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(-0.1879, 0.2374, 0.1534), Vector3.new(0.0705, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(-0.1174, 0.2374, 0.1534), Vector3.new(0.0235, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(0.1879, 0.2374, 0.1534), Vector3.new(0.0705, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(-0.2349, 0.2374, 0.0354), Vector3.new(0.0235, 0.0000, 0.0708), "Y", 3 },
+		{ Vector3.new(0.2349, 0.2374, 0.0354), Vector3.new(0.0235, 0.0000, 0.0708), "Y", 3 },
+		{ Vector3.new(-0.1879, 0.2374, 0.0118), Vector3.new(0.0705, 0.0000, 0.0708), "Y", 3 },
+		{ Vector3.new(0.1879, 0.2374, 0.0118), Vector3.new(0.0705, 0.0000, 0.0708), "Y", 3 },
+		{ Vector3.new(-0.1174, 0.2374, -0.0000), Vector3.new(0.0235, 0.0000, 0.0472), "Y", 3 },
+		{ Vector3.new(0.1174, 0.2374, -0.0000), Vector3.new(0.0235, 0.0000, 0.0472), "Y", 3 },
+		{ Vector3.new(-0.1996, 0.2374, -0.1180), Vector3.new(0.0940, 0.0000, 0.0472), "Y", 3 },
+		{ Vector3.new(-0.1174, 0.2374, -0.1062), Vector3.new(0.0235, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(0.1174, 0.2374, -0.1062), Vector3.new(0.0235, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(0.1996, 0.2374, -0.1180), Vector3.new(0.0940, 0.0000, 0.0472), "Y", 3 },
+		{ Vector3.new(-0.1409, 0.2374, -0.1298), Vector3.new(0.0235, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(0.1409, 0.2374, -0.1298), Vector3.new(0.0235, 0.0000, 0.0236), "Y", 3 },
+		{ Vector3.new(0.0000, -0.2374, -0.0000), Vector3.new(0.2584, 0.0000, 0.7079), "Y", 2 },
+		{ Vector3.new(-0.1409, -0.2374, 0.0118), Vector3.new(0.0235, 0.0000, 0.6371), "Y", 2 },
+		{ Vector3.new(0.1409, -0.2374, -0.0118), Vector3.new(0.0235, 0.0000, 0.6843), "Y", 2 },
+	},
+	DorsalFin = { Center = Vector3.new(-0.0003, 0.3202, 0.0432), Size = Vector3.new(0.0488, 0.1442, 0.2157) },
+	LeftFin = { Center = Vector3.new(-0.3395, -0.1748, -0.0119), Size = Vector3.new(0.1646, 0.0794, 0.1900) },
+	RightFin = { Center = Vector3.new(0.3393, -0.1748, -0.0123), Size = Vector3.new(0.1642, 0.0794, 0.1905) },
+	Tail = { Joint = Vector3.new(0.0000, -0.0129, 0.3539), Size = Vector3.new(0.0492, 0.3652, 0.2813) },
+}
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX12">
 				<Properties>
 					<string name="Name">PlayerProgress</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's leaderstats (Level, Money, XP, Evolution), the
@@ -1710,7 +1906,7 @@ return PlayerProgress
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX12">
+			<Item class="ModuleScript" referent="RBX13">
 				<Properties>
 					<string name="Name">PlayerSpecies</string>
 					<ProtectedString name="Source"><![CDATA[-- Tracks which water-creature species each player owns and which one is
@@ -1809,7 +2005,7 @@ return PlayerSpecies
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX13">
+			<Item class="ModuleScript" referent="RBX14">
 				<Properties>
 					<string name="Name">PlayerUpgrades</string>
 					<ProtectedString name="Source"><![CDATA[-- Owns each player's shop upgrade tiers (a non-leaderstat "Upgrades" folder,
@@ -1918,7 +2114,7 @@ return PlayerUpgrades
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX14">
+			<Item class="ModuleScript" referent="RBX15">
 				<Properties>
 					<string name="Name">RobuxShop</string>
 					<ProtectedString name="Source"><![CDATA[-- The "Robux Shop": real-money super powers bought via MarketplaceService
@@ -2068,7 +2264,7 @@ return RobuxShop
 				</Properties>
 			</Item>
 		</Item>
-		<Item class="Script" referent="RBX15">
+		<Item class="Script" referent="RBX16">
 			<Properties>
 				<string name="Name">PlayerCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Player-vs-player combat. Each evolution tier grants a different attack
@@ -2200,7 +2396,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX16">
+		<Item class="Script" referent="RBX17">
 			<Properties>
 				<string name="Name">RaftDestruction</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Raft" (see RaftSpawner) and destroys the raft
@@ -2257,7 +2453,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX17">
+		<Item class="Script" referent="RBX18">
 			<Properties>
 				<string name="Name">RaftSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns rafts carrying a random number of humans, scattered
@@ -2348,7 +2544,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX18">
+		<Item class="Script" referent="RBX19">
 			<Properties>
 				<string name="Name">ShipCannons</string>
 				<ProtectedString name="Source"><![CDATA[-- Ships tagged "Cannon" (Frigates and Galleons — see ShipSpawner) periodically
@@ -2466,7 +2662,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX19">
+		<Item class="Script" referent="RBX20">
 			<Properties>
 				<string name="Name">ShipCombat</string>
 				<ProtectedString name="Source"><![CDATA[-- Watches every part tagged "Ship" (see ShipSpawner) and handles ramming
@@ -2548,7 +2744,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX20">
+		<Item class="Script" referent="RBX21">
 			<Properties>
 				<string name="Name">ShipMovement</string>
 				<ProtectedString name="Source"><![CDATA[-- Makes each ship slowly drift in a small circle around its spawn point,
@@ -2595,7 +2791,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX21">
+		<Item class="Script" referent="RBX22">
 			<Properties>
 				<string name="Name">ShipSpawner</string>
 				<ProtectedString name="Source"><![CDATA[-- Periodically spawns ships: bigger, tougher versions of rafts, picked from
@@ -2983,7 +3179,7 @@ end
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX22">
+		<Item class="Script" referent="RBX23">
 			<Properties>
 				<string name="Name">ShopHandler</string>
 				<ProtectedString name="Source"><![CDATA[-- Server side of all three shop tabs:
@@ -3083,7 +3279,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX23">
+		<Item class="Script" referent="RBX24">
 			<Properties>
 				<string name="Name">SkySpawn</string>
 				<ProtectedString name="Source"><![CDATA[-- Every player (re)spawns inside a glass cube high above the water — an
@@ -3378,7 +3574,7 @@ Workspace:SetAttribute("SkySpawnGenerated", true)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX24">
+		<Item class="Script" referent="RBX25">
 			<Properties>
 				<string name="Name">WorldSetup</string>
 				<ProtectedString name="Source"><![CDATA[-- Fills the workspace Terrain with a big water volume (plus a sandy floor
@@ -3455,15 +3651,15 @@ end
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX25">
+	<Item class="StarterPlayer" referent="RBX26">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX26">
+		<Item class="StarterPlayerScripts" referent="RBX27">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX27">
+			<Item class="LocalScript" referent="RBX28">
 				<Properties>
 					<string name="Name">AttackController</string>
 					<ProtectedString name="Source"><![CDATA[-- Attack input: press F to attack. The server (PlayerCombat.server.lua)
@@ -3517,7 +3713,7 @@ end)
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX28">
+			<Item class="LocalScript" referent="RBX29">
 				<Properties>
 					<string name="Name">CreatureAnimator</string>
 					<ProtectedString name="Source"><![CDATA[-- Gives every player's fish body a gentle swimming animation: the tail (or,
@@ -3560,7 +3756,7 @@ end)
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX29">
+			<Item class="LocalScript" referent="RBX30">
 				<Properties>
 					<string name="Name">CreatureHud</string>
 					<ProtectedString name="Source"><![CDATA[-- Minimal HUD: pops up "+$X, +Y XP" (and a level-up banner) whenever the
@@ -3754,7 +3950,7 @@ refreshDepthChargeLabel()
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX30">
+			<Item class="LocalScript" referent="RBX31">
 				<Properties>
 					<string name="Name">SpeciesSelect</string>
 					<ProtectedString name="Source"><![CDATA[-- The species-choice panel shown when you touch the sky-spawn portal.
@@ -3893,7 +4089,7 @@ end)
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX31">
+			<Item class="LocalScript" referent="RBX32">
 				<Properties>
 					<string name="Name">UpgradeShop</string>
 					<ProtectedString name="Source"><![CDATA[-- A toggleable shop panel with three tabs:
